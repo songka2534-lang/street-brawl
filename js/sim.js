@@ -9,7 +9,7 @@ let G = null;
 function newWorld(mode) {
   return {
     mode, frame: 0, stage: 0, camX: 0, lockX: null, waveIdx: 0, wave: null, goT: 0,
-    players: [], enemies: [], items: [], barrels: [],
+    players: [], enemies: [], items: [], barrels: [], proj: [],
     fxLog: [], fxId: 0, nid: 1,
     phase: 'play', phaseT: 0, hitstop: 0, slowmo: 0, superT: 0, superBy: -1,
     lastEnemy: 0, lastEnemyT: 0, song: null, paused: false,
@@ -25,7 +25,7 @@ function newPlayer(pn, name, ch, pal) {
     st: 'idle', t: 0, anim: 'idle', fr: 0, rot: 0,
     hp: C.hp, maxHp: C.hp, lives: PLAYER.lives, score: 0, meter: 0,
     inv: 90, active: true, gone: false, combo: 0, buf: false, hitDone: false, hitSet: new Set(),
-    hits: 0, hitsT: 0, grab: 0, sub: null, knees: 0, stun: 0, flash: 0, super: false,
+    hits: 0, hitsT: 0, grab: 0, sub: null, knees: 0, stun: 0, flash: 0, super: false, wpn: null, grabHold: 0, rollDir: 1,
     pend: { atkP: 0, jmpP: 0, grabP: 0, spP: 0, sp2P: 0 },
   };
 }
@@ -45,7 +45,7 @@ function setSong(name) { G.song = name; playSong(name); }
 function startStage(i) {
   const S = STAGES[i];
   G.stage = i; G.camX = 0; G.lockX = null; G.waveIdx = 0; G.wave = null; G.goT = 0;
-  G.enemies = []; G.items = []; G.phase = 'play'; G.phaseT = 0; G.slowmo = 0; G.hitstop = 0;
+  G.enemies = []; G.items = []; G.proj = []; G.phase = 'play'; G.phaseT = 0; G.slowmo = 0; G.hitstop = 0;
   const r = seeded(S.seed * 31);
   G.barrels = S.barrels.map((x) => ({ id: G.nid++, x, z: ZMIN + 4 + Math.floor(r() * 22), hp: 3, broken: 0, t: 0 }));
   for (const p of G.players) {
@@ -69,7 +69,7 @@ function nearestPlayer(e) {
   return best;
 }
 
-const P_VULN_BLOCK = new Set(['down', 'lie', 'getup', 'dive', 'respawn', 'out', 'gone', 'win']);
+const P_VULN_BLOCK = new Set(['down', 'lie', 'getup', 'dive', 'respawn', 'out', 'gone', 'win', 'roll']);
 function vulnerable(p) { return p.active && !p.gone && !P_VULN_BLOCK.has(p.st) && p.inv <= 0; }
 
 const E_NOHIT = new Set(['down', 'lie', 'getup', 'dying', 'grabbed', 'thrown']);
@@ -106,6 +106,7 @@ function simStep(inputs) {
 
   for (const b of G.barrels) b.t++;
   updItems();
+  updProjectiles();
   if (G.lastEnemyT > 0) G.lastEnemyT--;
   if (G.goT > 0) G.goT--;
 
@@ -219,9 +220,13 @@ function updPlayer(p, inp) {
       if (G.phase === 'end') { p.anim = 'idle'; p.fr = Math.floor(p.t / 10) % 4; break; }
       if (inp.spP && trySpecial(p)) break;
       if (inp.sp2P && trySpin(p)) break;
-      if (inp.grabP && tryGrab(p)) break;
+      if (inp.grabP) { if (p.wpn) { startThrow(p); break; } if (tryGrab(p)) break; }
+      if (inp.grab && !p.wpn) {
+        if (++p.grabHold >= PLAYER.tauntHold && !enemyNear(p, 80)) { p.st = 'taunt'; p.t = 0; p.grabHold = 0; fx('taunt', p.x, -50, p.z); break; }
+      } else p.grabHold = 0;
+      if (inp.jmpP && inp.d) { p.st = 'roll'; p.t = 0; p.rollDir = dx || p.face; p.face = p.rollDir; fx('dust', p.x, 0, p.z); sfx('swing'); break; }
       if (inp.jmpP) { p.st = 'jump'; p.t = 0; p.vy = -C.jump; p.vx = dx * C.speed * 1.15; p.vz = dz * C.zspeed * 0.7; fx('jump', p.x, 0, p.z); break; }
-      if (inp.atkP) { p.combo = 0; beginAtk(p); break; }
+      if (inp.atkP) { p.combo = 0; if (p.wpn) beginWAtk(p); else beginAtk(p); break; }
       if (dx || dz) {
         p.x += dx * C.speed; p.z += dz * C.zspeed;
         if (dx) p.face = dx;
@@ -244,13 +249,52 @@ function updPlayer(p, inp) {
       if (inp.atkP && p.t > 1) p.buf = true;
       if (inp.spP && trySpecial(p)) break;
       if (inp.sp2P && trySpin(p)) break;
-      if (p.combo === 2 && fr <= C.hitF) p.x += p.face * 0.7;
+      const last = PLAYER.combo.length - 1;
+      if (p.combo === last && fr <= C.hitF) p.x += p.face * 0.7;
       if (p.t >= total) {
-        if (p.buf && p.combo < 2) { p.combo++; beginAtk(p); }
+        if (p.buf && p.combo < last) { p.combo++; beginAtk(p); }
         else { p.st = 'idle'; p.t = 0; p.combo = 0; }
       }
       break;
     }
+    case 'watk': {
+      if (!p.wpn) { p.st = 'idle'; p.t = 0; break; }
+      const W = WEAPONS[p.wpn.k], ticks = W.ticks[p.combo];
+      let acc = 0, fr = ticks.length - 1;
+      for (let i = 0; i < ticks.length; i++) { acc += ticks[i]; if (p.t < acc) { fr = i; break; } }
+      const total = ticks.reduce((a, b) => a + b, 0);
+      p.anim = 'wsw' + (p.combo + 1); p.fr = fr;
+      if (fr === 1 && !p.hitDone) {
+        p.hitDone = true;
+        if (attackHit(p, W.reach, W.dmg[p.combo] * C.dmg, p.combo === 2 || p.wpn.k === 'pipe' && p.combo === 1 ? 'heavy' : 'light')) {
+          if (--p.wpn.uses <= 0) { fx('wbrk', p.x + p.face * 30, -30, p.z); p.wpn = null; }
+        }
+      }
+      if (inp.atkP && p.t > 1) p.buf = true;
+      if (p.t >= total) {
+        if (p.buf && p.combo < 2 && p.wpn) { p.combo++; beginWAtk(p); }
+        else { p.st = 'idle'; p.t = 0; p.combo = 0; }
+      }
+      break;
+    }
+    case 'wthrow':
+      p.anim = 'wthrow'; p.fr = p.t < 6 ? 0 : p.t < 12 ? 1 : 2;
+      if (p.t === 6 && p.wpn) {
+        G.proj.push({ id: G.nid++, k: p.wpn.k, x: p.x + p.face * 16, y: -32, z: p.z, vx: p.face * 6.5, face: p.face, owner: p.pn, t: 0, hit: new Set() });
+        p.wpn = null; fx('thr', p.x, -30, p.z);
+      }
+      if (p.t >= 18) { p.st = 'idle'; p.t = 0; }
+      break;
+    case 'roll':
+      p.anim = 'roll'; p.fr = Math.min(3, Math.floor(p.t / 6));
+      p.x += p.rollDir * PLAYER.rollSpeed * (p.t < PLAYER.rollTicks - 6 ? 1 : 0.4);
+      if (p.t >= PLAYER.rollTicks) { p.st = 'idle'; p.t = 0; p.inv = Math.max(p.inv, 6); }
+      break;
+    case 'taunt':
+      p.anim = 'taunt'; p.fr = Math.floor(p.t / 10) % 4;
+      if (p.t === 40) { p.meter = Math.min(100, p.meter + PLAYER.tauntGain); fx('pick', p.x, -50, p.z, 'SUPER +'); }
+      if (p.t >= 64 || inp.atkP) { p.st = 'idle'; p.t = 0; }
+      break;
     case 'jump': case 'jkick': {
       p.x += p.vx; p.z += p.vz; p.vy += GRAV; p.y += p.vy;
       if (p.st === 'jump') {
@@ -315,6 +359,31 @@ function updPlayer(p, inp) {
       if (p.y >= 0) { p.y = 0; p.st = 'land'; p.t = 0; fx('land', p.x, 0, p.z); }
       break;
   }
+}
+
+function beginWAtk(p) {
+  p.st = 'watk'; p.t = 0; p.hitDone = false; p.buf = false; p.hitSet = new Set();
+  sfx('swing');
+}
+function startThrow(p) { p.st = 'wthrow'; p.t = 0; }
+function enemyNear(p, r) { return G.enemies.some((e) => e.hp > 0 && Math.abs(e.x - p.x) < r && Math.abs(e.z - p.z) < 30); }
+
+function updProjectiles() {
+  for (const q of G.proj) {
+    q.t++; q.x += q.vx;
+    const W = WEAPONS[q.k], owner = G.players[q.owner];
+    for (const e of G.enemies) {
+      if (q.hit.has(e.id) || !hittable(e)) continue;
+      if (Math.abs(e.x - q.x) < 20 && Math.abs(e.z - q.z) < 12) { q.hit.add(e.id); hurtEnemy(e, W.thrown * ((owner && CHARS[owner.ch]) ? CHARS[owner.ch].dmg : 1), 'heavy', owner); q.dead = q.hit.size >= 2; }
+    }
+    for (const b of G.barrels) {
+      if (b.broken || Math.abs(b.x - q.x) > 16 || Math.abs(b.z - q.z) > 12) continue;
+      b.hp = 0; b.broken = 1; b.t = 0; fx('brk', b.x, -22, b.z); dropItem(b.x, b.z + 3); q.dead = true;
+    }
+    if (q.t > 70 || q.x < G.camX - 30 || q.x > G.camX + VIEW_W + 30) q.dead = true;
+    if (q.dead) fx('wbrk', q.x, -30, q.z);
+  }
+  G.proj = G.proj.filter((q) => !q.dead);
 }
 
 function beginAtk(p) {
@@ -437,6 +506,7 @@ function hurtPlayer(p, dmg, heavy, fromX) {
   fx(heavy ? 'phvy' : 'phit', p.x, -30, p.z);
   G.hitstop = Math.max(G.hitstop, heavy ? 6 : 3);
   p.face = -dir;
+  if (heavy && p.wpn) { dropItem(p.x, p.z, p.wpn.k); p.wpn = null; }
   if (heavy) { p.st = 'down'; p.t = 0; p.vy = -3.2; p.vx = dir * 2.2; p.y = Math.min(p.y, -1); }
   else { p.st = 'hurt'; p.t = 0; p.stun = 16; p.x += dir * 3; }
   return true;
@@ -504,7 +574,8 @@ function enemyKO(e, p) {
     if (G.wave) G.wave.gi = G.wave.groups.length; // no more reinforcements
     fx('bossko', e.x, -40, e.z);
     for (const o of G.enemies) if (o !== e && o.hp > 0) { o.hp = 0; o._ko = true; knock(o, o.x < e.x ? -1 : 1); }
-  } else if (Math.random() < (e.type === 'brute' ? 0.4 : 0.1)) dropItem(e.x, e.z);
+  } else if (T.weapon && Math.random() < 0.7) dropItem(e.x, e.z, T.weapon);
+  else if (Math.random() < (e.type === 'brute' ? 0.4 : 0.1)) dropItem(e.x, e.z);
 }
 
 function enemyHit(e, reach, dmg, heavy) {
@@ -687,6 +758,11 @@ function updEAtk(e, T) {
       if (e.t >= 40) recover(e, 30);
       break;
     }
+    case 'wswing':
+      e.anim = 'punch'; e.fr = e.t < 6 ? 1 : 2;
+      if (e.t === 6) { enemyHit(e, R + 6, T.dmg, T.weapon === 'pipe'); sfx('swing'); }
+      if (e.t >= 24) recover(e, 30);
+      break;
     case 'slam':
       e.anim = 'punch'; e.fr = 0;
       e.x += e.vx; e.z += e.vz; e.vy += GRAV; e.y += e.vy;
@@ -702,7 +778,7 @@ function updEAtk(e, T) {
 
 /* ---------- items ---------- */
 function dropItem(x, z, kind) {
-  if (!kind) { const r = Math.random(); kind = r < 0.5 ? 'pizza' : r < 0.72 ? 'soda' : r < 0.84 ? 'burger' : 'gem'; }
+  if (!kind) { const r = Math.random(); kind = r < 0.42 ? 'pizza' : r < 0.6 ? 'soda' : r < 0.7 ? 'burger' : r < 0.82 ? 'gem' : r < 0.91 ? 'bat' : 'pipe'; }
   G.items.push({ id: G.nid++, kind, x, z: clamp(z, ZMIN + 2, ZMAX), y: -12, vy: -2.6, t: 0 });
 }
 function updItems() {
@@ -714,6 +790,7 @@ function updItems() {
       if (!p.active || p.gone || p.st === 'out' || p.y < -6 || P_VULN_BLOCK.has(p.st) && p.st !== 'dive') continue;
       if (Math.abs(p.x - it.x) < 15 && Math.abs(p.z - it.z) < 10) {
         const I = ITEMS[it.kind];
+        if (I.weapon) { if (p.wpn || p.st !== 'idle' && p.st !== 'walk') continue; p.wpn = { k: I.weapon, uses: WEAPONS[I.weapon].uses }; }
         if (I.heal) p.hp = Math.min(p.maxHp, p.hp + I.heal);
         if (I.score) p.score += I.score;
         it.taken = true;
@@ -732,11 +809,12 @@ function makeSnapshot() {
     f: G.frame, st: G.stage, ph: G.phase, pt: G.phaseT, cx: Math.round(G.camX * 10) / 10, go: G.goT > 0 ? 1 : 0,
     su: G.superT, sb: G.superBy, sm: G.slowmo > 0 ? 1 : 0, mu: G.song, le: G.lastEnemyT > 0 ? G.lastEnemy : 0,
     p: G.players.map((p) => [R1(p.x), R1(p.y), R1(p.z), p.face, p.anim, p.fr, Math.round(p.rot * 100), Math.ceil(p.hp), p.maxHp,
-      p.lives, p.score, Math.floor(p.meter), p.inv > 0 ? 1 : 0, p.active ? 1 : 0, p.pal, p.name, p.hits, p.st, p.flash > 0 ? 1 : 0, p.gone ? 1 : 0, p.ch]),
+      p.lives, p.score, Math.floor(p.meter), p.inv > 0 ? 1 : 0, p.active ? 1 : 0, p.pal, p.name, p.hits, p.st, p.flash > 0 ? 1 : 0, p.gone ? 1 : 0, p.ch, p.wpn ? p.wpn.k : '']),
     e: G.enemies.map((e) => [e.id, e.type, R1(e.x), R1(e.y), R1(e.z), e.face, e.anim, e.fr, Math.round(e.rot * 100), Math.ceil(e.hp), e.maxHp,
       e.flash > 0 ? 1 : 0, e.tele, e.st, e.rage, e.move || '']),
     b: G.barrels.map((b) => [b.id, b.x, b.z, b.broken]),
     i: G.items.map((i) => [i.id, i.kind, R1(i.x), R1(i.y), R1(i.z)]),
+    w: G.proj.map((q) => [q.id, q.k, R1(q.x), R1(q.y), R1(q.z), q.face]),
     x: G.fxLog.slice(-24),
   };
 }
@@ -756,7 +834,7 @@ function applySnapshot(s) {
     if (!p) p = G.players[i] = { id: 'p' + i, pn: i, x: a[0], y: a[1], z: a[2] };
     p.tx = a[0]; p.ty = a[1]; p.tz = a[2]; p.face = a[3]; p.anim = a[4]; p.fr = a[5]; p.rot = a[6] / 100;
     p.hp = a[7]; p.maxHp = a[8]; p.lives = a[9]; p.score = a[10]; p.meter = a[11]; p.inv = a[12]; p.active = !!a[13];
-    p.pal = a[14]; p.name = a[15]; p.hits = a[16]; p.st = a[17]; p.flash = a[18]; p.gone = !!a[19]; p.ch = a[20] || 'girl';
+    p.pal = a[14]; p.name = a[15]; p.hits = a[16]; p.st = a[17]; p.flash = a[18]; p.gone = !!a[19]; p.ch = a[20] || 'girl'; p.wpn = a[21] ? { k: a[21] } : null;
     if (Math.abs(p.tx - p.x) > 60 || Math.abs(p.ty - p.y) > 60) { p.x = p.tx; p.y = p.ty; p.z = p.tz; }
   });
   // enemies
@@ -771,6 +849,7 @@ function applySnapshot(s) {
   });
   G.barrels = s.b.map((a) => ({ id: a[0], x: a[1], z: a[2], broken: a[3] }));
   G.items = s.i.map((a) => ({ id: a[0], kind: a[1], x: a[2], y: a[3], z: a[4] }));
+  G.proj = (s.w || []).map((a) => ({ id: a[0], k: a[1], x: a[2], y: a[3], z: a[4], face: a[5] }));
   // effects
   if (first) G.fxSeen = s.x.length ? s.x[s.x.length - 1][0] : 0;
   for (const f of s.x) if (f[0] > G.fxSeen) { G.fxSeen = f[0]; playFx(f); }

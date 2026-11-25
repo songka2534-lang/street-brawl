@@ -54,11 +54,13 @@ const PLAYER = {
   combo: [
     { anim: 'jab',   ticks: [3, 4, 6],       hitF: 1, reach: 34, dmg: 6,  heavy: false },
     { anim: 'punch', ticks: [3, 4, 7],       hitF: 1, reach: 38, dmg: 7,  heavy: false },
+    { anim: 'chop',  ticks: [3, 4, 7],       hitF: 1, reach: 38, dmg: 8,  heavy: false },
     { anim: 'kick',  ticks: [3, 3, 4, 5, 9], hitF: 3, reach: 34, dmg: 12, heavy: true },
   ],
   jumpKick: { reach: 30, dmg: 12 },
   diveCost: 8, diveDmg: 16,
   spinCost: 8, spinDmg: 14,
+  rollTicks: 24, rollSpeed: 2.7, tauntHold: 28, tauntGain: 18,
   superDmg: 30,
 };
 
@@ -69,10 +71,18 @@ const ENEMY = {
   brute: { name: 'BIG BO',  pal: 'brute', sc: 1.22, hp: 75,  spd: 0.6,  dmg: 12, reach: 32, wind: 20, armor: 1, score: 500,  moves: ['heavy'] },
   boss1: { name: 'BIG RED', pal: 'boss1', sc: 1.45, hp: 280, spd: 0.75, dmg: 12, reach: 38, wind: 16, armor: 2, score: 5000, boss: true, moves: ['combo', 'charge', 'combo'] },
   boss2: { name: 'VIPER',   pal: 'boss2', sc: 1.35, hp: 320, spd: 1.3,  dmg: 10, reach: 36, wind: 10, armor: 2, score: 7000, boss: true, moves: ['combo', 'dash', 'dash', 'charge'] },
+  batter: { name: 'SLUGGER', pal: 'dash',  sc: 1.0,  hp: 40,  spd: 0.8,  dmg: 10, reach: 44, wind: 16, armor: 0, score: 450, moves: ['wswing'], weapon: 'bat' },
+  piper:  { name: 'RUSTY',   pal: 'brute', sc: 1.1,  hp: 58,  spd: 0.65, dmg: 14, reach: 38, wind: 20, armor: 1, score: 550, moves: ['wswing'], weapon: 'pipe' },
   elite: { name: 'BLAZE',   pal: 'elite', sc: 1.05, hp: 48,  spd: 1.15, dmg: 9,  reach: 30, wind: 9,  armor: 0, score: 600,  moves: ['punch', 'dash', 'punch'] },
   boss4: { name: 'IRON BO', pal: 'boss4', sc: 1.75, hp: 520, spd: 0.7, dmg: 15, reach: 44, wind: 16, armor: 2, score: 12000, boss: true, moves: ['heavy', 'charge', 'slam', 'combo'] },
   boss5: { name: 'KING ZERO X', pal: 'boss5', sc: 1.65, hp: 650, spd: 1.05, dmg: 15, reach: 44, wind: 10, armor: 2, score: 20000, boss: true, moves: ['combo', 'charge', 'slam', 'dash'] },
   boss3: { name: 'KING ZERO', pal: 'boss3', sc: 1.6, hp: 460, spd: 0.9, dmg: 14, reach: 42, wind: 14, armor: 2, score: 10000, boss: true, moves: ['combo', 'charge', 'slam'] },
+};
+
+/* Pick-up weapons: combo damage per swing, reach, swings before it breaks, thrown damage. */
+const WEAPONS = {
+  bat:  { name: 'ไม้เบสบอล', reach: 54, dmg: [10, 10, 17], ticks: [[3, 4, 8], [3, 4, 8], [4, 5, 11]], uses: 10, thrown: 20 },
+  pipe: { name: 'ท่อเหล็ก',  reach: 46, dmg: [13, 13, 21], ticks: [[4, 5, 9], [4, 5, 9], [5, 5, 12]], uses: 10, thrown: 24 },
 };
 
 const ITEMS = {
@@ -80,6 +90,8 @@ const ITEMS = {
   burger: { heal: 120, label: 'FULL' },
   soda:   { heal: 20,  label: '+20' },
   gem:    { score: 2000, label: '+2000' },
+  bat:    { weapon: 'bat',  label: 'ไม้เบสบอล!' },
+  pipe:   { weapon: 'pipe', label: 'ท่อเหล็ก!' },
 };
 
 /* Stages. `at` = camera x where the screen locks and the wave starts ('end' = end of stage).
@@ -90,44 +102,44 @@ const STAGES = [
     waves: [
       { at: 200,  g: [['punk', 'punk'], ['punk']] },
       { at: 600,  g: [['punk', 'dash'], ['punk', 'punk']] },
-      { at: 1020, g: [['dash', 'dash', 'punk'], ['brute']] },
+      { at: 1020, g: [['dash', 'batter', 'punk'], ['brute']] },
       { at: 1380, g: [['punk', 'brute'], ['dash', 'punk', 'dash']] },
       { at: 'end', boss: 'boss1', g: [['boss1'], ['punk', 'punk'], ['dash', 'punk']] },
     ] },
-  { name: 'STAGE 2', sub: 'ซอยไฟนีออน', len: 2300, mood: 'night', seed: 21, song: 's2',
+  { name: 'STAGE 2', sub: 'ตลาดนัดกลางคืน', len: 2300, mood: 'night', theme: 'market', seed: 21, song: 's2',
     barrels: [420, 900, 1380, 1880],
     waves: [
       { at: 220,  g: [['dash', 'dash'], ['punk', 'punk']] },
-      { at: 680,  g: [['brute', 'punk'], ['dash', 'dash']] },
+      { at: 680,  g: [['batter', 'punk'], ['dash', 'piper']] },
       { at: 1150, g: [['punk', 'punk', 'dash'], ['brute', 'brute']] },
-      { at: 1600, g: [['dash', 'dash', 'dash'], ['punk', 'brute', 'punk']] },
+      { at: 1600, g: [['dash', 'batter', 'dash'], ['punk', 'piper', 'punk']] },
       { at: 'end', boss: 'boss2', g: [['boss2'], ['dash', 'dash'], ['punk', 'dash']] },
     ] },
-  { name: 'STAGE 3', sub: 'ถนนสายฝน', len: 2600, mood: 'rain', seed: 33, song: 's3',
+  { name: 'STAGE 3', sub: 'ท่าเรือคืนฝนตก', len: 2600, mood: 'rain', theme: 'pier', seed: 33, song: 's3',
     barrels: [380, 980, 1500, 2050],
     waves: [
       { at: 240,  g: [['brute', 'dash', 'punk'], ['punk', 'punk']] },
-      { at: 760,  g: [['dash', 'dash', 'brute'], ['punk', 'dash', 'punk']] },
+      { at: 760,  g: [['piper', 'dash', 'batter'], ['punk', 'dash', 'punk']] },
       { at: 1260, g: [['brute', 'brute'], ['dash', 'dash', 'dash']] },
-      { at: 1760, g: [['punk', 'brute', 'dash'], ['brute', 'punk', 'dash']] },
+      { at: 1760, g: [['batter', 'brute', 'dash'], ['piper', 'punk', 'batter']] },
       { at: 'end', boss: 'boss3', g: [['boss3'], ['brute'], ['dash', 'dash'], ['punk', 'punk']] },
     ] },
-  { name: 'STAGE 4', sub: 'เช้าตรู่หมอกควัน', len: 2500, mood: 'fog', seed: 47, song: 's4',
+  { name: 'STAGE 4', sub: 'ดาดฟ้าตึกในหมอก', len: 2500, mood: 'fog', theme: 'roof', seed: 47, song: 's4',
     barrels: [420, 1000, 1560, 2100],
     waves: [
       { at: 240,  g: [['elite', 'punk'], ['dash', 'dash', 'punk']] },
-      { at: 760,  g: [['brute', 'elite'], ['dash', 'dash'], ['punk', 'punk']] },
+      { at: 760,  g: [['piper', 'elite'], ['batter', 'dash'], ['punk', 'punk']] },
       { at: 1280, g: [['elite', 'elite'], ['brute', 'dash', 'dash']] },
-      { at: 1800, g: [['brute', 'brute', 'elite'], ['dash', 'elite', 'dash']] },
+      { at: 1800, g: [['piper', 'brute', 'elite'], ['batter', 'elite', 'batter']] },
       { at: 'end', boss: 'boss4', g: [['boss4'], ['brute'], ['elite', 'dash'], ['punk', 'punk']] },
     ] },
-  { name: 'STAGE 5', sub: 'คืนไฟดับ', len: 2800, mood: 'dark', seed: 59, song: 's5',
+  { name: 'STAGE 5', sub: 'รถไฟฟ้าไฟดับ', len: 2800, mood: 'dark', theme: 'train', seed: 59, song: 's5',
     barrels: [380, 900, 1450, 2000, 2450],
     waves: [
       { at: 260,  g: [['elite', 'elite', 'dash'], ['brute', 'punk']] },
       { at: 800,  g: [['dash', 'dash', 'dash'], ['elite', 'brute'], ['punk', 'punk']] },
-      { at: 1340, g: [['brute', 'elite', 'brute'], ['dash', 'dash', 'elite']] },
-      { at: 1900, g: [['elite', 'elite', 'elite'], ['brute', 'brute'], ['dash', 'dash']] },
+      { at: 1340, g: [['piper', 'elite', 'piper'], ['batter', 'dash', 'elite']] },
+      { at: 1900, g: [['elite', 'batter', 'elite'], ['brute', 'piper'], ['batter', 'dash']] },
       { at: 'end', boss: 'boss5', g: [['boss5'], ['elite', 'elite'], ['brute', 'dash'], ['elite', 'dash', 'dash']] },
     ] },
 ];

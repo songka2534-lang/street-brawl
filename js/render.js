@@ -111,6 +111,17 @@ function buildIcons() {
     '...kkkkkk...', '..kcwccwck..', '.kcwccccwck.', 'kkkkkkkkkkkk', 'kcccwcccccck', '.kccwcccck..',
     '..kccccck...', '...kccck....', '....kck.....', '.....k......', '............'],
     { k: '#0a2a3a', c: '#34e6ff', w: '#ffffff' });
+  ICONS.bat = pix(20, 5, ['..............kkkk..', 'kkkkkkkkkkkkkkwwwwk.', 'kbbbbbbbbbbbbbwwwwwk', 'kkkkkkkkkkkkkkwwwwk.', '..............kkkk..'], { k: '#2a1408', b: '#b07a40', w: '#e8c088' });
+  ICONS.pipe = pix(20, 5, ['kk................kk', 'kgkkkkkkkkkkkkkkkkgk', 'kgssssssssssssssssgk', 'kgkkkkkkkkkkkkkkkkgk', 'kk................kk'], { k: '#202428', s: '#b8c0cc', g: '#6a7280' });
+}
+
+function drawWeapon2D(g, k, x, y, face, sc, swing) {
+  g.save(); g.translate(Math.round(x + face * 10 * sc), Math.round(y - 27 * sc)); g.scale(face, 1);
+  g.rotate(swing ? 0.15 : -1.1);
+  g.fillStyle = '#1a0e08'; g.fillRect(-2, -2.5, 22 * sc, 5);
+  g.fillStyle = k === 'bat' ? '#d8a868' : '#a8b0bc'; g.fillRect(-1, -1.5, 20 * sc, 3);
+  if (k === 'bat') { g.fillStyle = '#e8c088'; g.fillRect(12 * sc, -2, 8 * sc, 4); }
+  g.restore();
 }
 
 /* ---------- effects ---------- */
@@ -172,6 +183,8 @@ function playFx(e) {
     case 'boss': FXS.warn = 150; sfx('boss'); break;
     case 'bn': { const [top, sub] = String(a).split('|'); FXS.banner = { top, sub: sub || '', t: 0 }; break; }
     case 'go': sfx('go'); break;
+    case 'wbrk': for (let i = 0; i < 7; i++) addPart({ type: 'chunk', x: x + rnd(-6, 6), y: rnd(-30, -16), z, vx: rnd(-2.2, 2.2), vy: rnd(-3.5, -1), life: 0, max: 40, size: 2 + Math.random() * 2, col: ['#b07a40', '#a8b0bc', '#e8c088'][i % 3], rot: 0 }); sfx('brk'); break;
+    case 'taunt': floatText(x, y, z, '♪', '#ff6fd8', true); sfx('lvl'); break;
     case 'spin':
       sfx('sp'); addPart({ type: 'ring', x, y, z, life: 0, max: 16, size: 48, col: '#aee6ff' });
       burst(x, y, z, 16, { cols: ['#ffffff', '#aee6ff', '#ffd23f'], speed: 3.4 }); shake(3); break;
@@ -210,9 +223,16 @@ function entSheet(o, isP) {
 function mapAnim(sheet, anim, fr, rot) {
   if (sheet === 'girl') {
     if (anim === 'spin') return { anim: 'kick', fr: 3, rot: 0 };
+    if (anim === 'chop' || anim === 'wsw1' || anim === 'wsw2' || anim === 'wthrow') return { anim: 'punch', fr: Math.min(2, fr), rot: 0 };
+    if (anim === 'wsw3') return { anim: 'kick', fr: [1, 3, 4][fr] ?? 4, rot: 0 };
+    if (anim === 'roll') return { anim: 'jump', fr: 3, rot: 0 };
+    if (anim === 'taunt') return { anim: 'idle', fr: fr % 4, rot: 0 };
     return { anim, fr, rot };
   }
   switch (anim) {
+    case 'chop': case 'wsw1': case 'wsw2': case 'wsw3': case 'wthrow': return { anim: 'punch', fr: Math.min(2, fr), rot: 0 };
+    case 'roll': return { anim: 'hurt', fr: 2, rot: 0 };
+    case 'taunt': return { anim: 'idle', fr: fr % 4, rot: 0 };
     case 'idle': return { anim: 'idle', fr: fr % 4, rot: 0 };
     case 'walk': return { anim: 'walk', fr: fr % 4, rot: 0 };
     case 'jab': return { anim: 'punch', fr: [0, 1, 2][fr] ?? 2, rot: 0 };
@@ -391,6 +411,8 @@ function drawWorld(g, left, S) {
     }
     const white = o.flash && (RFRAME >> 1) % 2 === 0;
     drawEnt(g, sheet, pal, o, o.anim, o.fr, o.rot, x, o.z + o.y, o.face, sc, white, isP);
+    const wk = isP ? (o.wpn && o.wpn.k) : (ENEMY[o.type] && ENEMY[o.type].weapon && o.hp > 0 && !['down', 'lie', 'dying', 'thrown'].includes(o.st) ? ENEMY[o.type].weapon : null);
+    if (wk) drawWeapon2D(g, wk, x, o.z + o.y, o.face, sc, isP ? /^wsw/.test(o.anim) && o.fr >= 1 : (o.st === 'atk' && o.fr >= 2));
     // whirlwind
     if (isP && o.anim === 'spin') {
       g.save(); g.globalCompositeOperation = 'lighter';
@@ -410,6 +432,11 @@ function drawWorld(g, left, S) {
     }
   }
 
+  // thrown weapons
+  for (const q of (G.proj || [])) {
+    g.save(); g.translate(Math.round(q.x - left), Math.round(q.z + q.y)); g.rotate(RFRAME * 0.5 * q.face);
+    g.fillStyle = q.k === 'bat' ? '#c89a5a' : '#9aa0aa'; g.fillRect(-10, -1.5, 20, 3); g.restore();
+  }
   // particles
   for (const p of PARTS) drawPart(g, p, left);
 
