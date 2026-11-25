@@ -2,7 +2,52 @@
 /* App flow: screens, game loop, online lobby. */
 
 const $ = (s) => document.querySelector(s);
-const APP = { screen: 'title', lastPhase: null, endShown: false, tick: 0, prevScreen: 'scrTitle' };
+const APP = { screen: 'title', lastPhase: null, endShown: false, tick: 0, prevScreen: 'scrTitle', myChar: 'girl' };
+
+/* ---------- character pick ---------- */
+function palFor(pn, ch, otherCh) { const C = CHARS[ch] || CHARS.girl; return pn === 1 && ch === otherCh ? C.pals[1] : C.pals[0]; }
+function buildCharButtons(box, pnFn) {
+  box.innerHTML = '';
+  for (const [key, C] of Object.entries(CHARS)) {
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'char'; b.dataset.ch = key;
+    const c = document.createElement('canvas'); c.width = FW; c.height = FH; c.dataset.ch = key;
+    const name = document.createElement('b'); name.textContent = C.name;
+    const tag = document.createElement('small'); tag.textContent = C.tag;
+    b.append(c, name, tag);
+    b.onclick = () => { audioUnlock(); pickChar(key); };
+    box.append(b);
+  }
+  box._pn = pnFn;
+  markChars();
+}
+function pickChar(ch) {
+  APP.myChar = ch; store('sb-char', ch); markChars();
+  if (NET.open) netSend({ t: 'ch', ch });
+  updateSlots();
+}
+function markChars() { for (const b of document.querySelectorAll('.char')) b.setAttribute('aria-pressed', String(b.dataset.ch === APP.myChar)); }
+function drawCharPreviews() {
+  if (APP.screen !== 'scrSelect' && APP.screen !== 'scrLobby') return;
+  for (const box of [$('#soloChars'), $('#lobbyChars')]) {
+    if (!box || box.closest('.scr').hidden) continue;
+    const pn = box._pn ? box._pn() : 0;
+    for (const c of box.querySelectorAll('canvas')) {
+      const ch = c.dataset.ch, C = CHARS[ch];
+      const g = c.getContext('2d'); g.imageSmoothingEnabled = false; g.clearRect(0, 0, FW, FH);
+      const sel = ch === APP.myChar;
+      const pal = palFor(pn, ch, NET.remoteChar || '');
+      const fr = sel ? Math.floor(RFRAME / 6) % 4 : Math.floor(RFRAME / 10) % 4;
+      drawSprite(g, C.sheet, pal, sel ? 'walk' : 'idle', fr, AX, AY, 1, 1, 0, false, false);
+    }
+  }
+}
+function updateSlots() {
+  const host = NET.role === 'host';
+  const myC = CHARS[APP.myChar].name, otherC = NET.remoteChar ? CHARS[NET.remoteChar].name : '-';
+  $('#slot1c').textContent = 'ผู้เล่น 1 · ' + (host ? myC : otherC);
+  $('#slot2c').textContent = 'ผู้เล่น 2 · ' + (host ? (NET.open ? otherC : '-') : myC);
+}
 
 function store(k, v) { try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); } catch (e) { return null; } return null; }
 function myName() { const v = ($('#inName').value || '').trim().slice(0, 10); return v || 'ผู้เล่น'; }
@@ -36,15 +81,15 @@ function enterGame() {
 function startSolo() {
   audioUnlock();
   G = newWorld('solo');
-  G.players = [newPlayer(0, myName())];
+  G.players = [newPlayer(0, myName(), APP.myChar)];
   startStage(0);
   enterGame();
 }
 
 function startHostGame() {
   G = newWorld('host');
-  G.players = [newPlayer(0, myName())];
-  if (NET.open) { const p2 = newPlayer(1, NET.remoteName || 'แฟน'); G.players.push(p2); }
+  G.players = [newPlayer(0, myName(), APP.myChar, palFor(0, APP.myChar))];
+  if (NET.open) { const rc = NET.remoteChar || 'girl'; G.players.push(newPlayer(1, NET.remoteName || 'แฟน', rc, palFor(1, rc, APP.myChar))); }
   startStage(0);
   netSend({ t: 'start' });
   enterGame();
@@ -74,6 +119,7 @@ function frame(now) {
   acc += dt;
   while (acc >= 1000 / 60) { tick(); acc -= 1000 / 60; }
   renderFrame();
+  drawCharPreviews();
 }
 
 function tick() {
@@ -102,7 +148,9 @@ function tick() {
 function hostManageGuest() {
   const p2 = G.players[1];
   if (NET.open) {
-    if (!p2) { const p = newPlayer(1, NET.remoteName || 'แฟน'); p.st = 'respawn'; p.y = -170; p.x = G.camX + 150; p.inv = 200; G.players.push(p); fx('bn', 0, 0, 0, 'PLAYER 2|' + p.name + ' เข้าร่วมแล้ว!'); }
+    const rc = NET.remoteChar || 'girl';
+    if (p2 && p2.gone && p2.ch !== rc) { G.players.length = 1; return; }
+    if (!p2) { const p = newPlayer(1, NET.remoteName || 'แฟน', rc, palFor(1, rc, G.players[0].ch)); p.st = 'respawn'; p.y = -170; p.x = G.camX + 150; p.inv = 200; G.players.push(p); fx('bn', 0, 0, 0, 'PLAYER 2|' + p.name + ' เข้าร่วมแล้ว!'); }
     else if (p2.gone) { p2.gone = false; p2.active = true; p2.lives = Math.max(1, p2.lives); p2.hp = p2.maxHp; p2.st = 'respawn'; p2.t = 0; p2.y = -170; p2.vy = 0; p2.x = G.camX + 150; p2.inv = 200; p2.name = NET.remoteName || p2.name; }
   } else if (p2 && !p2.gone) {
     p2.gone = true; p2.active = false;
@@ -158,6 +206,7 @@ async function doHost() {
     $('#lobbyCode').textContent = code;
     $('#slot1').textContent = myName() + ' (คุณ)';
     $('#slot2').textContent = 'รอแฟนเข้าห้อง…';
+    updateSlots();
     $('#btnStart').disabled = false; $('#btnStart').hidden = false;
     $('#shareRow').hidden = false;
     setMsg($('#lobbyMsg'), 'ส่งรหัสให้แฟน แล้วรอให้แฟนกด "เข้าห้อง" กดเริ่มก่อนก็ได้ แฟนจะเข้ามาร่วมกลางเกม');
@@ -181,6 +230,7 @@ async function doJoin() {
     $('#lobbyCode').textContent = code;
     $('#slot1').textContent = 'กำลังโหลด…';
     $('#slot2').textContent = myName() + ' (คุณ)';
+    updateSlots();
     $('#btnStart').hidden = true; $('#shareRow').hidden = true;
     setMsg($('#lobbyMsg'), 'เข้าห้องแล้ว! รอแฟนกดเริ่มเกม');
     setMsg(msg, '');
@@ -199,7 +249,9 @@ function setupNetHandlers() {
       } else {
         $('#slot1').textContent = NET.remoteName;
       }
+      updateSlots();
     },
+    ch() { updateSlots(); },
     start() { if (NET.role === 'guest') startGuestGame(); },
     s(m) { if (G && G.mode === 'guest' && m.s) applySnapshot(m.s); },
     quit() { if (NET.role === 'guest') quitToTitle('แฟนออกจากเกมแล้ว'); },
@@ -239,7 +291,11 @@ function wire() {
   const n = store('sb-name'); if (n) $('#inName').value = n;
   const c = store('sb-code'); if (c) $('#inCode').value = c;
   $('#inName').addEventListener('change', () => store('sb-name', myName()));
-  $('#goSolo').onclick = () => { store('sb-name', myName()); startSolo(); };
+  const sc = store('sb-char'); if (sc && CHARS[sc]) APP.myChar = sc;
+  buildCharButtons($('#soloChars'), () => 0);
+  buildCharButtons($('#lobbyChars'), () => (NET.role === 'guest' ? 1 : 0));
+  $('#goSolo').onclick = () => { audioUnlock(); store('sb-name', myName()); markChars(); show('scrSelect'); };
+  $('#btnSoloGo').onclick = () => startSolo();
   $('#goOnline').onclick = () => { audioUnlock(); store('sb-name', myName()); setMsg($('#onlineMsg'), ''); show('scrOnline'); };
   $('#goHelp').onclick = () => { audioUnlock(); show('scrHelp'); };
   for (const b of document.querySelectorAll('[data-back]')) b.onclick = () => { netClose(); show('scrTitle'); };

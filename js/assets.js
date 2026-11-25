@@ -38,7 +38,7 @@ function recolor(img, map, flash) {
   return c;
 }
 
-const SHEET_PALS = { girl: ['p1', 'p2'], punk: ['punk', 'dash', 'brute', 'boss1', 'boss2', 'boss3'] };
+const SHEET_PALS = { girl: ['p1', 'p2'], punk: ['punk', 'dash', 'brute', 'boss1', 'boss2', 'boss3', 'guy1', 'guy2', 'elite', 'boss4', 'boss5'] };
 
 async function loadAssets(onProgress) {
   const jobs = [];

@@ -32,6 +32,20 @@ const PALS = {
   boss2: { '#ce2038': '#ffd23f', '#8a0b41': '#ad7810', '#ed4924': '#fff2a0', '#004040': '#0a382a', '#4060a0': '#0f6a4a', '#6080e0': '#2ec48a', '#b5b6ff': '#a0ffd8' },
   boss3: { '#ce2038': '#f4f4ff', '#8a0b41': '#9a9ab4', '#ed4924': '#ffffff', '#004040': '#1a1030', '#4060a0': '#2a1a4c', '#6080e0': '#ffd23f', '#b5b6ff': '#fff2a0', '#806060': '#ffd23f',
     '#ffb164': '#b77d55', '#ffb66b': '#b77d55', '#d77e4b': '#8a5230', '#9c5c37': '#5e341c' },
+  // playable guy (built from the punk sheet, recoloured so he never looks like an enemy)
+  guy1: { '#ce2038': '#24202e', '#8a0b41': '#100c16', '#ed4924': '#4a4458', '#004040': '#f2f0f8', '#806060': '#c8c4d8', '#4060a0': '#2b4fa8', '#6080e0': '#4a78e0', '#b5b6ff': '#a8c4ff' },
+  guy2: { '#ce2038': '#ffcf3a', '#8a0b41': '#b07a10', '#ed4924': '#fff2a0', '#004040': '#ff3d7f', '#806060': '#ffb0c8', '#4060a0': '#2a2a3a', '#6080e0': '#4a4a60', '#b5b6ff': '#9a9ab4' },
+  elite: { '#ce2038': '#ff8a1f', '#8a0b41': '#a04a10', '#ed4924': '#ffd23f', '#004040': '#141018', '#4060a0': '#5a1020', '#6080e0': '#8a2030', '#b5b6ff': '#d06070' },
+  boss4: { '#ce2038': '#8adfff', '#8a0b41': '#2f6f9a', '#ed4924': '#e0f8ff', '#004040': '#3a4450', '#4060a0': '#5a6470', '#6080e0': '#8a96a4', '#b5b6ff': '#d0dae4',
+    '#ffb164': '#c98a5a', '#ffb66b': '#c98a5a', '#d77e4b': '#9a5a32', '#9c5c37': '#6a3a20' },
+  boss5: { '#ce2038': '#ff1f3a', '#8a0b41': '#7a0010', '#ed4924': '#ff9aa8', '#004040': '#0c0a10', '#4060a0': '#1c1824', '#6080e0': '#ff1f3a', '#b5b6ff': '#ff9aa8', '#806060': '#ff1f3a',
+    '#ffb164': '#a87050', '#ffb66b': '#a87050', '#d77e4b': '#7a4428', '#9c5c37': '#4e2a16' },
+};
+
+/* Playable characters. `pals` = [main colours, second-player colours]. */
+const CHARS = {
+  girl: { name: 'มายา', tag: 'หญิง · ว่องไว', sheet: 'girl', pals: ['p1', 'p2'], hp: 120, speed: 1.55, zspeed: 1.1, jump: 5.4, dmg: 1.0, reach: 0 },
+  guy:  { name: 'ไค',   tag: 'ชาย · หมัดหนัก', sheet: 'punk', pals: ['guy1', 'guy2'], hp: 150, speed: 1.3, zspeed: 0.95, jump: 4.9, dmg: 1.3, reach: 4 },
 };
 
 const PLAYER = {
@@ -44,6 +58,7 @@ const PLAYER = {
   ],
   jumpKick: { reach: 30, dmg: 12 },
   diveCost: 8, diveDmg: 16,
+  spinCost: 8, spinDmg: 14,
   superDmg: 30,
 };
 
@@ -54,6 +69,9 @@ const ENEMY = {
   brute: { name: 'BIG BO',  pal: 'brute', sc: 1.22, hp: 75,  spd: 0.6,  dmg: 12, reach: 32, wind: 20, armor: 1, score: 500,  moves: ['heavy'] },
   boss1: { name: 'BIG RED', pal: 'boss1', sc: 1.45, hp: 280, spd: 0.75, dmg: 12, reach: 38, wind: 16, armor: 2, score: 5000, boss: true, moves: ['combo', 'charge', 'combo'] },
   boss2: { name: 'VIPER',   pal: 'boss2', sc: 1.35, hp: 320, spd: 1.3,  dmg: 10, reach: 36, wind: 10, armor: 2, score: 7000, boss: true, moves: ['combo', 'dash', 'dash', 'charge'] },
+  elite: { name: 'BLAZE',   pal: 'elite', sc: 1.05, hp: 48,  spd: 1.15, dmg: 9,  reach: 30, wind: 9,  armor: 0, score: 600,  moves: ['punch', 'dash', 'punch'] },
+  boss4: { name: 'IRON BO', pal: 'boss4', sc: 1.75, hp: 520, spd: 0.7, dmg: 15, reach: 44, wind: 16, armor: 2, score: 12000, boss: true, moves: ['heavy', 'charge', 'slam', 'combo'] },
+  boss5: { name: 'KING ZERO X', pal: 'boss5', sc: 1.65, hp: 650, spd: 1.05, dmg: 15, reach: 44, wind: 10, armor: 2, score: 20000, boss: true, moves: ['combo', 'charge', 'slam', 'dash'] },
   boss3: { name: 'KING ZERO', pal: 'boss3', sc: 1.6, hp: 460, spd: 0.9, dmg: 14, reach: 42, wind: 14, armor: 2, score: 10000, boss: true, moves: ['combo', 'charge', 'slam'] },
 };
 
@@ -93,6 +111,24 @@ const STAGES = [
       { at: 1260, g: [['brute', 'brute'], ['dash', 'dash', 'dash']] },
       { at: 1760, g: [['punk', 'brute', 'dash'], ['brute', 'punk', 'dash']] },
       { at: 'end', boss: 'boss3', g: [['boss3'], ['brute'], ['dash', 'dash'], ['punk', 'punk']] },
+    ] },
+  { name: 'STAGE 4', sub: 'เช้าตรู่หมอกควัน', len: 2500, mood: 'fog', seed: 47, song: 's4',
+    barrels: [420, 1000, 1560, 2100],
+    waves: [
+      { at: 240,  g: [['elite', 'punk'], ['dash', 'dash', 'punk']] },
+      { at: 760,  g: [['brute', 'elite'], ['dash', 'dash'], ['punk', 'punk']] },
+      { at: 1280, g: [['elite', 'elite'], ['brute', 'dash', 'dash']] },
+      { at: 1800, g: [['brute', 'brute', 'elite'], ['dash', 'elite', 'dash']] },
+      { at: 'end', boss: 'boss4', g: [['boss4'], ['brute'], ['elite', 'dash'], ['punk', 'punk']] },
+    ] },
+  { name: 'STAGE 5', sub: 'คืนไฟดับ', len: 2800, mood: 'dark', seed: 59, song: 's5',
+    barrels: [380, 900, 1450, 2000, 2450],
+    waves: [
+      { at: 260,  g: [['elite', 'elite', 'dash'], ['brute', 'punk']] },
+      { at: 800,  g: [['dash', 'dash', 'dash'], ['elite', 'brute'], ['punk', 'punk']] },
+      { at: 1340, g: [['brute', 'elite', 'brute'], ['dash', 'dash', 'elite']] },
+      { at: 1900, g: [['elite', 'elite', 'elite'], ['brute', 'brute'], ['dash', 'dash']] },
+      { at: 'end', boss: 'boss5', g: [['boss5'], ['elite', 'elite'], ['brute', 'dash'], ['elite', 'dash', 'dash']] },
     ] },
 ];
 

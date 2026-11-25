@@ -71,6 +71,17 @@ input { font: 600 1.05rem var(--thai); color: var(--text); background: rgba(0,0,
 .help b { color: var(--gold); }
 .keys { color: var(--muted); font-size: .85rem; }
 
+/* ---------- character pick ---------- */
+.chars { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.char { font: inherit; color: var(--text); background: rgba(255,255,255,.05); border: 2px solid var(--line); border-radius: 12px; padding: 8px; display: grid; justify-items: center; gap: 2px; cursor: pointer; }
+.char canvas { width: 96px; height: 63px; image-rendering: pixelated; }
+.char b { font-size: 1.05rem; }
+.char small { color: var(--muted); font-size: .8rem; }
+.char[aria-pressed="true"] { border-color: var(--gold); background: rgba(255,210,63,.12); box-shadow: 0 0 0 2px rgba(255,210,63,.25); }
+.chars.small .char { padding: 4px 8px; grid-auto-flow: column; align-items: center; gap: 8px; }
+.chars.small canvas { width: 64px; height: 42px; }
+.pick-row { display: grid; gap: 6px; color: var(--muted); font-size: .9rem; }
+
 /* ---------- touch controls ---------- */
 #touch { position: fixed; inset: 0; z-index: 10; pointer-events: none; }
 #stickZone { position: absolute; left: 0; top: 30%; bottom: 0; width: 45%; pointer-events: auto; touch-action: none; }
@@ -78,7 +89,7 @@ input { font: 600 1.05rem var(--thai); color: var(--text); background: rgba(0,0,
   background: radial-gradient(circle, rgba(255,255,255,.06) 40%, rgba(255,255,255,.14) 41%, rgba(255,255,255,.04) 70%); border: 2px solid rgba(255,255,255,.22); transform: translate(0, 0); }
 #stickKnob { position: absolute; left: 50%; top: 50%; width: 58px; height: 58px; margin: -29px 0 0 -29px; border-radius: 50%;
   background: radial-gradient(circle at 35% 30%, rgba(255,255,255,.55), rgba(180,170,230,.35)); border: 2px solid rgba(255,255,255,.5); }
-#pads { position: absolute; right: max(14px, calc(env(safe-area-inset-right) + 6px)); bottom: max(12px, env(safe-area-inset-bottom)); width: 236px; height: 200px; pointer-events: none; }
+#pads { position: absolute; right: max(14px, calc(env(safe-area-inset-right) + 6px)); bottom: max(12px, env(safe-area-inset-bottom)); width: 250px; height: 200px; pointer-events: none; }
 .pad { position: absolute; pointer-events: auto; touch-action: none; border-radius: 50%; border: 3px solid rgba(255,255,255,.35); color: #fff;
   display: grid; place-items: center; align-content: center; gap: 0; padding: 0; font: 600 .72rem var(--thai); opacity: .82; }
 .pad svg { width: 46%; height: 46%; fill: currentColor; }
@@ -88,6 +99,7 @@ input { font: 600 1.05rem var(--thai); color: var(--text); background: rgba(0,0,
 .pad-jmp { width: 78px; height: 78px; right: 108px; bottom: 6px; background: radial-gradient(circle at 35% 30%, #6fa8ff, #2a4fb8); }
 .pad-grab { width: 70px; height: 70px; right: 96px; bottom: 96px; background: radial-gradient(circle at 35% 30%, #c98bff, #6a2fb0); }
 .pad-sp { width: 70px; height: 70px; right: 10px; bottom: 112px; background: radial-gradient(circle at 35% 30%, #ff7a9f, #c0184e); }
+.pad-sp2 { width: 62px; height: 62px; right: 180px; bottom: 94px; background: radial-gradient(circle at 35% 30%, #7fe8ff, #1a8aa8); }
 .pad-sp.ready { box-shadow: 0 0 0 3px var(--gold), 0 0 22px var(--gold); }
 
 #corner { position: fixed; z-index: 12; top: max(4px, env(safe-area-inset-top)); left: 50%; transform: translateX(-50%); display: flex; gap: 6px; }

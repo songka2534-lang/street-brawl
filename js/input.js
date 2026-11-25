@@ -1,15 +1,15 @@
 'use strict';
 /* Keyboard + gamepad + touch. Presses are latched so a quick tap is never lost between ticks. */
 
-const BTN = ['atk', 'jmp', 'grab', 'sp'];
+const BTN = ['atk', 'jmp', 'grab', 'sp', 'sp2'];
 const KEYMAP = {
   l: ['ArrowLeft', 'KeyA'], r: ['ArrowRight', 'KeyD'], u: ['ArrowUp', 'KeyW'], d: ['ArrowDown', 'KeyS'],
-  atk: ['KeyJ', 'KeyZ'], jmp: ['KeyK', 'KeyX', 'Space'], grab: ['KeyL', 'KeyC'], sp: ['KeyI', 'KeyV'],
+  atk: ['KeyJ', 'KeyZ'], jmp: ['KeyK', 'KeyX', 'Space'], grab: ['KeyL', 'KeyC'], sp: ['KeyI', 'KeyV'], sp2: ['KeyU', 'KeyB'],
 };
 const KEYS = new Set();
-const LATCH = { atk: 0, jmp: 0, grab: 0, sp: 0 };
-const TOUCH = { l: 0, r: 0, u: 0, d: 0, atk: 0, jmp: 0, grab: 0, sp: 0 };
-const PREV = { atk: 0, jmp: 0, grab: 0, sp: 0 };
+const LATCH = { atk: 0, jmp: 0, grab: 0, sp: 0, sp2: 0 };
+const TOUCH = { l: 0, r: 0, u: 0, d: 0, atk: 0, jmp: 0, grab: 0, sp: 0, sp2: 0 };
+const PREV = { atk: 0, jmp: 0, grab: 0, sp: 0, sp2: 0 };
 
 const KEY_TO_BTN = {};
 for (const b of BTN) for (const k of KEYMAP[b]) KEY_TO_BTN[k] = b;
@@ -27,13 +27,13 @@ window.addEventListener('blur', () => KEYS.clear());
 function keyHeld(name) { for (const k of KEYMAP[name]) if (KEYS.has(k)) return 1; return 0; }
 
 function padState() {
-  const out = { l: 0, r: 0, u: 0, d: 0, atk: 0, jmp: 0, grab: 0, sp: 0 };
+  const out = { l: 0, r: 0, u: 0, d: 0, atk: 0, jmp: 0, grab: 0, sp: 0, sp2: 0 };
   const pads = navigator.getGamepads ? navigator.getGamepads() : [];
   for (const p of pads) {
     if (!p) continue;
     const ax = p.axes[0] || 0, ay = p.axes[1] || 0, b = (i) => (p.buttons[i] && p.buttons[i].pressed ? 1 : 0);
     out.l |= ax < -0.4 || b(14); out.r |= ax > 0.4 || b(15); out.u |= ay < -0.4 || b(12); out.d |= ay > 0.4 || b(13);
-    out.atk |= b(2); out.jmp |= b(0); out.grab |= b(3); out.sp |= b(1) || b(5);
+    out.atk |= b(2); out.jmp |= b(0); out.grab |= b(3); out.sp |= b(1) || b(5); out.sp2 |= b(4) || b(7);
     break;
   }
   return out;

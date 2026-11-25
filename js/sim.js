@@ -16,15 +16,17 @@ function newWorld(mode) {
   };
 }
 
-function newPlayer(pn, name) {
+function newPlayer(pn, name, ch, pal) {
+  ch = CHARS[ch] ? ch : 'girl';
+  const C = CHARS[ch];
   return {
-    id: 'p' + pn, pn, pal: pn === 0 ? 'p1' : 'p2', name: name || (pn === 0 ? 'P1' : 'P2'),
+    id: 'p' + pn, pn, ch, pal: pal || C.pals[pn === 0 ? 0 : 1], name: name || (pn === 0 ? 'P1' : 'P2'),
     x: 60 + pn * 40, y: 0, z: 160 + pn * 34, vx: 0, vy: 0, vz: 0, face: 1,
     st: 'idle', t: 0, anim: 'idle', fr: 0, rot: 0,
-    hp: PLAYER.hp, maxHp: PLAYER.hp, lives: PLAYER.lives, score: 0, meter: 0,
+    hp: C.hp, maxHp: C.hp, lives: PLAYER.lives, score: 0, meter: 0,
     inv: 90, active: true, gone: false, combo: 0, buf: false, hitDone: false, hitSet: new Set(),
     hits: 0, hitsT: 0, grab: 0, sub: null, knees: 0, stun: 0, flash: 0, super: false,
-    pend: { atkP: 0, jmpP: 0, grabP: 0, spP: 0 },
+    pend: { atkP: 0, jmpP: 0, grabP: 0, spP: 0, sp2P: 0 },
   };
 }
 
@@ -209,17 +211,19 @@ function updPlayer(p, inp) {
   if (p.flash > 0) p.flash--;
   if (p.hitsT > 0 && --p.hitsT === 0) p.hits = 0;
   const dx = (inp.r ? 1 : 0) - (inp.l ? 1 : 0), dz = (inp.d ? 1 : 0) - (inp.u ? 1 : 0);
+  const C = CHARS[p.ch] || CHARS.girl;
 
   switch (p.st) {
     case 'idle': case 'walk': {
       p.rot = 0;
       if (G.phase === 'end') { p.anim = 'idle'; p.fr = Math.floor(p.t / 10) % 4; break; }
       if (inp.spP && trySpecial(p)) break;
+      if (inp.sp2P && trySpin(p)) break;
       if (inp.grabP && tryGrab(p)) break;
-      if (inp.jmpP) { p.st = 'jump'; p.t = 0; p.vy = -PLAYER.jump; p.vx = dx * PLAYER.speed * 1.15; p.vz = dz * PLAYER.zspeed * 0.7; fx('jump', p.x, 0, p.z); break; }
+      if (inp.jmpP) { p.st = 'jump'; p.t = 0; p.vy = -C.jump; p.vx = dx * C.speed * 1.15; p.vz = dz * C.zspeed * 0.7; fx('jump', p.x, 0, p.z); break; }
       if (inp.atkP) { p.combo = 0; beginAtk(p); break; }
       if (dx || dz) {
-        p.x += dx * PLAYER.speed; p.z += dz * PLAYER.zspeed;
+        p.x += dx * C.speed; p.z += dz * C.zspeed;
         if (dx) p.face = dx;
         if (p.st !== 'walk') { p.st = 'walk'; p.t = 0; }
         // walking into a dizzy enemy grabs it, like the arcade classics
@@ -230,14 +234,16 @@ function updPlayer(p, inp) {
       break;
     }
     case 'atk': {
+      const CH = CHARS[p.ch] || CHARS.girl;
       const C = PLAYER.combo[p.combo];
       let acc = 0, fr = C.ticks.length - 1;
       for (let i = 0; i < C.ticks.length; i++) { acc += C.ticks[i]; if (p.t < acc) { fr = i; break; } }
       const total = C.ticks.reduce((a, b) => a + b, 0);
       p.anim = C.anim; p.fr = fr;
-      if (fr === C.hitF && !p.hitDone) { p.hitDone = true; attackHit(p, C.reach, C.dmg, C.heavy ? 'heavy' : 'light'); }
+      if (fr === C.hitF && !p.hitDone) { p.hitDone = true; attackHit(p, C.reach + CH.reach, C.dmg * CH.dmg, C.heavy ? 'heavy' : 'light'); }
       if (inp.atkP && p.t > 1) p.buf = true;
       if (inp.spP && trySpecial(p)) break;
+      if (inp.sp2P && trySpin(p)) break;
       if (p.combo === 2 && fr <= C.hitF) p.x += p.face * 0.7;
       if (p.t >= total) {
         if (p.buf && p.combo < 2) { p.combo++; beginAtk(p); }
@@ -253,7 +259,7 @@ function updPlayer(p, inp) {
         if (inp.atkP) { p.st = 'jkick'; p.t = 0; p.hitSet = new Set(); sfx('swing'); }
       } else {
         p.anim = 'jump_kick'; p.fr = p.t < 3 ? 0 : p.t < 26 ? 1 : 2;
-        if (p.fr === 1) attackHit(p, PLAYER.jumpKick.reach, PLAYER.jumpKick.dmg, 'heavy', { air: true });
+        if (p.fr === 1) attackHit(p, PLAYER.jumpKick.reach + C.reach, PLAYER.jumpKick.dmg * C.dmg, 'heavy', { air: true });
       }
       if (p.y >= 0) { p.y = 0; p.vy = 0; p.st = 'land'; p.t = 0; fx('land', p.x, 0, p.z); }
       break;
@@ -269,9 +275,17 @@ function updPlayer(p, inp) {
         if (p.t === 10) { p.vy = -2.8; p.vx = p.face * (p.super ? 6.4 : 5.4); p.hitSet = new Set(); }
         p.fr = p.t < 16 ? 3 : 4;
         p.x += p.vx; p.vy += GRAV * 0.62; p.y += p.vy;
-        attackHit(p, 30, p.super ? PLAYER.superDmg : PLAYER.diveDmg, 'heavy', { back: 14 });
+        attackHit(p, 30 + C.reach, (p.super ? PLAYER.superDmg : PLAYER.diveDmg) * C.dmg, 'heavy', { back: 14 });
         if (p.y >= 0 && p.t > 12) { p.y = 0; p.st = 'land'; p.t = 0; p.vx = 0; p.super = false; fx('land', p.x, 0, p.z); }
       }
+      break;
+    }
+    case 'spin': {
+      // whirlwind kick: hits both sides twice
+      p.anim = 'spin'; p.fr = 0;
+      if (p.t % 4 === 0) p.face = -p.face;
+      if (p.t === 6 || p.t === 20) { p.hitSet = new Set(); attackHit(p, 44 + C.reach, PLAYER.spinDmg * C.dmg, 'heavy', { around: true }); }
+      if (p.t >= 30) { p.face = p.spinFace || p.face; p.st = 'idle'; p.t = 0; }
       break;
     }
     case 'grab': updGrab(p, inp, dx); break;
@@ -323,6 +337,14 @@ function trySpecial(p) {
   return true;
 }
 
+function trySpin(p) {
+  if (p.hp <= PLAYER.spinCost + 1) return false;
+  p.hp -= PLAYER.spinCost;
+  p.st = 'spin'; p.t = 0; p.inv = 32; p.spinFace = p.face; p.hitSet = new Set();
+  fx('spin', p.x, -24, p.z);
+  return true;
+}
+
 function superRelease() {
   const p = G.players[G.superBy];
   let n = 0;
@@ -364,7 +386,7 @@ function updGrab(p, inp, dx) {
   if (p.sub !== 'throw') { e.x = p.x + p.face * 20; e.z = p.z + 0.1; e.y = 0; e.face = -p.face; }
   if (p.sub === 'knee') {
     p.anim = 'kick'; p.fr = p.t < 4 ? 1 : 2;
-    if (p.t === 4) { hurtEnemy(e, 7, 'grab', p); if (e.hp <= 0) { p.st = 'idle'; p.t = 0; p.sub = null; return; } }
+    if (p.t === 4) { hurtEnemy(e, 7 * (CHARS[p.ch] || CHARS.girl).dmg, 'grab', p); if (e.hp <= 0) { p.st = 'idle'; p.t = 0; p.sub = null; return; } }
     if (p.t >= 12) { p.sub = null; p.t = 0; }
   } else if (p.sub === 'throw') {
     p.anim = 'punch'; p.fr = p.t < 5 ? 0 : p.t < 14 ? 1 : 2;
@@ -428,14 +450,14 @@ function attackHit(p, reach, dmg, kind, opt = {}) {
     if (p.hitSet.has(e.id) || !hittable(e)) continue;
     const T = ENEMY[e.type];
     if (Math.abs(e.z - p.z) > 9 + 4 * T.sc) continue;
-    const dx = (e.x - p.x) * p.face;
+    const dx = opt.around ? Math.abs(e.x - p.x) : (e.x - p.x) * p.face;
     if (dx < -back || dx > reach + 10 * (T.sc - 1)) continue;
     p.hitSet.add(e.id); any = true;
     hurtEnemy(e, dmg, kind, p);
   }
   for (const b of G.barrels) {
     if (b.broken || p.hitSet.has(b.id) || Math.abs(b.z - p.z) > 12) continue;
-    const dx = (b.x - p.x) * p.face;
+    const dx = opt.around ? Math.abs(b.x - p.x) : (b.x - p.x) * p.face;
     if (dx < -back || dx > reach + 6) continue;
     p.hitSet.add(b.id); any = true;
     b.hp--; fx(b.hp > 0 ? 'hit' : 'brk', b.x, -22, b.z);
@@ -710,7 +732,7 @@ function makeSnapshot() {
     f: G.frame, st: G.stage, ph: G.phase, pt: G.phaseT, cx: Math.round(G.camX * 10) / 10, go: G.goT > 0 ? 1 : 0,
     su: G.superT, sb: G.superBy, sm: G.slowmo > 0 ? 1 : 0, mu: G.song, le: G.lastEnemyT > 0 ? G.lastEnemy : 0,
     p: G.players.map((p) => [R1(p.x), R1(p.y), R1(p.z), p.face, p.anim, p.fr, Math.round(p.rot * 100), Math.ceil(p.hp), p.maxHp,
-      p.lives, p.score, Math.floor(p.meter), p.inv > 0 ? 1 : 0, p.active ? 1 : 0, p.pal, p.name, p.hits, p.st, p.flash > 0 ? 1 : 0, p.gone ? 1 : 0]),
+      p.lives, p.score, Math.floor(p.meter), p.inv > 0 ? 1 : 0, p.active ? 1 : 0, p.pal, p.name, p.hits, p.st, p.flash > 0 ? 1 : 0, p.gone ? 1 : 0, p.ch]),
     e: G.enemies.map((e) => [e.id, e.type, R1(e.x), R1(e.y), R1(e.z), e.face, e.anim, e.fr, Math.round(e.rot * 100), Math.ceil(e.hp), e.maxHp,
       e.flash > 0 ? 1 : 0, e.tele, e.st, e.rage]),
     b: G.barrels.map((b) => [b.id, b.x, b.z, b.broken]),
@@ -734,7 +756,7 @@ function applySnapshot(s) {
     if (!p) p = G.players[i] = { id: 'p' + i, pn: i, x: a[0], y: a[1], z: a[2] };
     p.tx = a[0]; p.ty = a[1]; p.tz = a[2]; p.face = a[3]; p.anim = a[4]; p.fr = a[5]; p.rot = a[6] / 100;
     p.hp = a[7]; p.maxHp = a[8]; p.lives = a[9]; p.score = a[10]; p.meter = a[11]; p.inv = a[12]; p.active = !!a[13];
-    p.pal = a[14]; p.name = a[15]; p.hits = a[16]; p.st = a[17]; p.flash = a[18]; p.gone = !!a[19];
+    p.pal = a[14]; p.name = a[15]; p.hits = a[16]; p.st = a[17]; p.flash = a[18]; p.gone = !!a[19]; p.ch = a[20] || 'girl';
     if (Math.abs(p.tx - p.x) > 60 || Math.abs(p.ty - p.y) > 60) { p.x = p.tx; p.y = p.ty; p.z = p.tz; }
   });
   // enemies

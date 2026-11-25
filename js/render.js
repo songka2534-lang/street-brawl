@@ -172,6 +172,9 @@ function playFx(e) {
     case 'boss': FXS.warn = 150; sfx('boss'); break;
     case 'bn': { const [top, sub] = String(a).split('|'); FXS.banner = { top, sub: sub || '', t: 0 }; break; }
     case 'go': sfx('go'); break;
+    case 'spin':
+      sfx('sp'); addPart({ type: 'ring', x, y, z, life: 0, max: 16, size: 48, col: '#aee6ff' });
+      burst(x, y, z, 16, { cols: ['#ffffff', '#aee6ff', '#ffd23f'], speed: 3.4 }); shake(3); break;
     case 'clear': sfx('clear'); break;
   }
 }
@@ -200,8 +203,35 @@ function updParts() {
 
 /* ---------- sprites ---------- */
 function entSheet(o, isP) {
-  if (isP) return { sheet: 'girl', pal: o.pal || 'p1', sc: 1 };
+  if (isP) { const C = CHARS[o.ch] || CHARS.girl; return { sheet: C.sheet, pal: o.pal || C.pals[0], sc: 1 }; }
   const T = ENEMY[o.type]; return { sheet: 'punk', pal: T.pal, sc: T.sc };
+}
+/** Player animations are written for the girl sheet; the guy borrows frames from the punk sheet. */
+function mapAnim(sheet, anim, fr, rot) {
+  if (sheet === 'girl') {
+    if (anim === 'spin') return { anim: 'kick', fr: 3, rot: 0 };
+    return { anim, fr, rot };
+  }
+  switch (anim) {
+    case 'idle': return { anim: 'idle', fr: fr % 4, rot: 0 };
+    case 'walk': return { anim: 'walk', fr: fr % 4, rot: 0 };
+    case 'jab': return { anim: 'punch', fr: [0, 1, 2][fr] ?? 2, rot: 0 };
+    case 'punch': return { anim: 'punch', fr: [0, 2, 1][fr] ?? 1, rot: 0 };
+    case 'kick': return { anim: 'punch', fr: [0, 0, 1, 2, 2][fr] ?? 2, rot: fr >= 3 ? 0.12 : 0 };
+    case 'jump': return { anim: 'idle', fr: fr === 0 ? 0 : 2, rot: fr === 0 ? 0 : -0.12 };
+    case 'jump_kick': return fr === 1 ? { anim: 'punch', fr: 2, rot: 0.45 } : { anim: 'hurt', fr: 0, rot: 0 };
+    case 'dive_kick': return fr < 3 ? { anim: 'punch', fr: 0, rot: -0.15 } : { anim: 'punch', fr: 2, rot: 0.55 };
+    case 'spin': return { anim: 'punch', fr: 2, rot: 0 };
+    case 'hurt':
+      if (Math.abs(rot) > 1.2) return { anim: 'hurt', fr: 3, rot: 0 };
+      if (rot) return { anim: 'hurt', fr: 2, rot: 0 };
+      return { anim: 'hurt', fr: fr % 2, rot: 0 };
+    default: return { anim: 'idle', fr: 0, rot: 0 };
+  }
+}
+function drawEnt(g, sheet, pal, o, anim, fr, rot, x, y, face, sc, white, isP) {
+  if (isP) { const m = mapAnim(sheet, anim, fr, rot); anim = m.anim; fr = m.fr; rot = m.rot; }
+  drawSprite(g, sheet, pal, anim, fr, x, y, face, sc, rot, white, !isP && o.st === 'thrown');
 }
 function drawSprite(g, sheet, pal, anim, fr, x, y, face, sc, rot, white, pivotMid) {
   const strips = white ? FLASH[sheet] : SPR[sheet][pal];
@@ -253,7 +283,7 @@ function blit() {
 }
 
 function drawBackLayer(g, left, mood) {
-  g.fillStyle = mood === 'dusk' ? '#2a1430' : '#0b0a1e';
+  g.fillStyle = mood === 'dusk' ? '#2a1430' : mood === 'fog' ? '#7d8498' : '#0b0a1e';
   g.fillRect(0, 0, RW, 100);
   const B = IMG.back, off = Math.floor(left * 0.25) % 96;
   for (let x = -off - 96; x < RW + 96; x += 96) g.drawImage(B, x, 10);
@@ -279,7 +309,7 @@ function drawWorld(g, left, S) {
     g.globalCompositeOperation = 'lighter'; g.globalAlpha = 0.08; g.fillStyle = '#ff8a3a'; g.fillRect(0, 0, RW, VIEW_H); g.restore();
   }
   // street lights pools
-  if (mood !== 'dusk') for (const lx of st.lamps) {
+  if (mood !== 'dusk' && mood !== 'fog') for (const lx of st.lamps) {
     const x = lx - left * 1.25;
     if (x < -120 || x > RW + 120) continue;
     g.save(); g.globalCompositeOperation = 'lighter';
@@ -331,7 +361,7 @@ function drawWorld(g, left, S) {
     const isP = d.k === 'p';
     const { sheet, pal, sc } = entSheet(o, isP);
     // afterimages
-    const trailOn = (isP && (o.anim === 'dive_kick' || (o.anim === 'jump_kick' && o.fr === 1))) || (!isP && (o.st === 'thrown' || (o.st === 'atk' && (o.anim === 'walk')) ));
+    const trailOn = (isP && (o.anim === 'dive_kick' || o.anim === 'spin' || (o.anim === 'jump_kick' && o.fr === 1))) || (!isP && (o.st === 'thrown' || (o.st === 'atk' && (o.anim === 'walk')) ));
     let tr = TRAILS.get(o.id);
     if (trailOn) {
       if (!tr) { tr = []; TRAILS.set(o.id, tr); }
@@ -341,7 +371,7 @@ function drawWorld(g, left, S) {
       tr.forEach((q, i) => {
         if (i === tr.length - 1) return;
         g.globalAlpha = 0.12 + i * 0.06;
-        drawSprite(g, sheet, pal, q.anim, q.fr, q.x - left, q.z + q.y, q.face, sc, q.rot, false, !isP);
+        drawEnt(g, sheet, pal, o, q.anim, q.fr, q.rot, q.x - left, q.z + q.y, q.face, sc, false, isP);
       });
       g.restore();
       if (isP && o.anim === 'dive_kick' && o.fr >= 3) addPart({ type: 'flame', x: o.x - o.face * 6 + rnd(-3, 3), y: o.y - 26 + rnd(-4, 4), z: o.z, vx: -o.face * rnd(0.3, 1), vy: rnd(-0.6, 0.2), life: 0, max: 16, col: FIRE[Math.floor(Math.random() * 3)], size: 2 });
@@ -360,7 +390,18 @@ function drawWorld(g, left, S) {
       if (o.rage && RFRAME % 3 === 0) addPart({ type: 'flame', x: o.x + rnd(-14, 14) * sc, y: o.y - rnd(4, 50) * sc, z: o.z, vx: 0, vy: -rnd(0.4, 1.2), life: 0, max: 18, col: FIRE[2 + Math.floor(Math.random() * 3)], size: 2 });
     }
     const white = o.flash && (RFRAME >> 1) % 2 === 0;
-    drawSprite(g, sheet, pal, o.anim, o.fr, x, o.z + o.y, o.face, sc, o.rot, white, !isP && o.st === 'thrown');
+    drawEnt(g, sheet, pal, o, o.anim, o.fr, o.rot, x, o.z + o.y, o.face, sc, white, isP);
+    // whirlwind
+    if (isP && o.anim === 'spin') {
+      g.save(); g.globalCompositeOperation = 'lighter';
+      for (let k = 0; k < 3; k++) {
+        const a0 = RFRAME * 0.5 + k * 2.1;
+        g.strokeStyle = k === 1 ? 'rgba(255,210,63,0.8)' : 'rgba(170,230,255,0.75)'; g.lineWidth = 2;
+        g.beginPath(); g.ellipse(x, o.z + o.y - 22, 30 + k * 5, 9 + k * 2, 0, a0, a0 + 2.2); g.stroke();
+      }
+      g.restore();
+      if (RFRAME % 2 === 0) addPart({ type: 'spark', x: o.x + rnd(-30, 30), y: o.y - rnd(6, 34), z: o.z, vx: rnd(-2, 2), vy: rnd(-1.5, 0), life: 0, max: 14, col: HOT[Math.floor(Math.random() * 4)], size: 1 });
+    }
     // attack telegraph (red flash)
     if (!isP && o.tele && (RFRAME >> 2) % 2 === 0) {
       g.save(); g.globalCompositeOperation = 'lighter'; g.globalAlpha = 0.55;
@@ -397,18 +438,61 @@ function drawWorld(g, left, S) {
   }
 
   // mood grading
-  if (mood !== 'dusk') {
+  if (mood === 'night' || mood === 'rain') {
     g.save(); g.globalCompositeOperation = 'multiply';
     g.fillStyle = mood === 'rain' ? 'rgba(90,110,170,1)' : 'rgba(120,110,190,1)';
     g.globalAlpha = mood === 'rain' ? 0.55 : 0.4;
     g.fillRect(0, 0, RW, VIEW_H); g.restore();
-  }
+  } else if (mood === 'fog') drawFog(g, left);
+  else if (mood === 'dark') drawDark(g, left, list, st);
   // vignette
   const vg = g.createRadialGradient(RW / 2, VIEW_H / 2, VIEW_H * 0.45, RW / 2, VIEW_H / 2, RW * 0.7);
   vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,0,0.45)');
   g.fillStyle = vg; g.fillRect(0, 0, RW, VIEW_H);
   // super cut-in darkens the world
   if (FXS.cutin) { g.fillStyle = 'rgba(10,0,20,0.55)'; g.fillRect(0, 0, RW, VIEW_H); }
+}
+
+function drawFog(g, left) {
+  g.save();
+  g.globalCompositeOperation = 'multiply'; g.globalAlpha = 0.5; g.fillStyle = '#c8d2e6'; g.fillRect(0, 0, RW, VIEW_H);
+  g.globalCompositeOperation = 'source-over';
+  const gr = g.createLinearGradient(0, 0, 0, VIEW_H);
+  gr.addColorStop(0, 'rgba(225,230,240,0.55)'); gr.addColorStop(0.55, 'rgba(225,230,240,0.12)'); gr.addColorStop(1, 'rgba(225,230,240,0.3)');
+  g.globalAlpha = 1; g.fillStyle = gr; g.fillRect(0, 0, RW, VIEW_H);
+  // drifting fog banks
+  for (let i = 0; i < 5; i++) {
+    const w = 260, x = ((i * 190 - left * (0.6 + i * 0.15) - RFRAME * (0.25 + i * 0.07)) % (RW + w) + RW + w) % (RW + w) - w / 2;
+    const y = 120 + i * 22;
+    const fg = g.createRadialGradient(x, y, 4, x, y, w / 2);
+    fg.addColorStop(0, 'rgba(235,240,248,0.35)'); fg.addColorStop(1, 'rgba(235,240,248,0)');
+    g.fillStyle = fg; g.save(); g.translate(x, y); g.scale(1, 0.3); g.translate(-x, -y);
+    g.fillRect(x - w / 2, y - w / 2, w, w); g.restore();
+  }
+  g.restore();
+}
+
+const DK = document.createElement('canvas');
+function drawDark(g, left, list, st) {
+  if (DK.width !== RW) { DK.width = RW; DK.height = VIEW_H; }
+  const d = DK.getContext('2d');
+  d.globalCompositeOperation = 'source-over';
+  d.clearRect(0, 0, RW, VIEW_H);
+  d.fillStyle = 'rgba(2,2,10,0.86)'; d.fillRect(0, 0, RW, VIEW_H);
+  d.globalCompositeOperation = 'destination-out';
+  const hole = (x, y, r, a) => { const gr = d.createRadialGradient(x, y, 1, x, y, r); gr.addColorStop(0, `rgba(0,0,0,${a})`); gr.addColorStop(1, 'rgba(0,0,0,0)'); d.fillStyle = gr; d.fillRect(x - r, y - r, r * 2, r * 2); };
+  for (const lx of st.lamps) {
+    const x = lx - left * 1.25; if (x < -150 || x > RW + 150) continue;
+    const on = ((RFRAME + lx) % 233) > 6;
+    if (on) { d.save(); d.translate(x + 10, 196); d.scale(1, 0.4); hole(0, 0, 110, 0.95); d.restore(); hole(x + 9, VIEW_H - 125, 34, 0.9); }
+  }
+  for (const s of st.signs) { const x = s.x - st.pad - left; if (x < -90 || x > RW + 10) continue; if (((RFRAME + s.x) >> 3) % 5) hole(x + 30, s.y + 12, 46, 0.8); }
+  for (const dd of list) if (dd.k === 'p') hole(dd.o.x - left, dd.o.z + dd.o.y - 22, 52, 0.85);
+  for (const dd of list) if (dd.k === 'e' && ENEMY[dd.o.type] && ENEMY[dd.o.type].boss) hole(dd.o.x - left, dd.o.z + dd.o.y - 30, 40, 0.6);
+  for (const p of PARTS) if (p.type === 'star' || p.type === 'boom' || p.type === 'flame') hole(p.x - left, p.z + p.y, p.type === 'flame' ? 8 : 30, 0.7);
+  g.drawImage(DK, 0, 0);
+  // faint blue rim so the street is still readable
+  g.save(); g.globalCompositeOperation = 'lighter'; g.globalAlpha = 0.05; g.fillStyle = '#4060c0'; g.fillRect(0, 0, RW, VIEW_H); g.restore();
 }
 
 function glow(g, x, y, r, col) {
@@ -464,7 +548,7 @@ function drawAttract(g) {
   }
   const t = RFRAME;
   drawSprite(g, 'girl', 'p1', 'idle', Math.floor(t / 10) % 4, RW / 2 - 40, 200, 1, 1, 0);
-  drawSprite(g, 'girl', 'p2', 'idle', Math.floor(t / 10) % 4, RW / 2 - 4, 214, 1, 1, 0);
+  drawSprite(g, 'punk', 'guy1', 'idle', Math.floor(t / 10) % 4, RW / 2 - 4, 214, 1, 1, 0);
   drawSprite(g, 'punk', 'boss1', 'idle', Math.floor(t / 10) % 4, RW / 2 + 70, 206, -1, 1.45, 0);
   g.save(); g.globalCompositeOperation = 'multiply'; g.globalAlpha = 0.45; g.fillStyle = '#6a5ab0'; g.fillRect(0, 0, RW, VIEW_H); g.restore();
 }

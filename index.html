@@ -31,6 +31,10 @@
 <div id="touch" hidden>
   <div id="stickZone"><div id="stickBase"><div id="stickKnob"></div></div></div>
   <div id="pads">
+    <button class="pad pad-sp2" data-b="sp2" aria-label="เตะหมุน">
+      <svg viewBox="0 0 48 48"><path d="M24 6a18 18 0 1017 12h-5a13 13 0 11-4-7l-5 5h14V2l-5 5a18 18 0 00-12-1z"/></svg>
+      <span>หมุน</span>
+    </button>
     <button class="pad pad-sp" data-b="sp" aria-label="ท่าพิเศษ">
       <svg viewBox="0 0 48 48"><path d="M24 4l5.6 12.4L43 18l-10 9.4L35.6 41 24 34.2 12.4 41 15 27.4 5 18l13.4-1.6z"/></svg>
       <span>พิเศษ</span>
@@ -74,11 +78,23 @@
       <li><b>ตี</b> กดรัวได้ 3 จังหวะ จังหวะสุดท้ายเตะจนศัตรูล้ม</li>
       <li><b>โดด</b> แล้วกด <b>ตี</b> กลางอากาศ เป็นกระโดดเตะ</li>
       <li><b>จับ</b> เมื่อยืนชิดศัตรู กด <b>ตี</b> เพื่อเข่า แล้วกด <b>จับ</b> อีกครั้งเพื่อทุ่มใส่ศัตรูตัวอื่น</li>
+      <li><b>หมุน</b> เตะหมุนพายุ กวาดศัตรูทั้งซ้ายและขวาให้ล้ม ใช้เลือดเล็กน้อย</li>
       <li><b>พิเศษ</b> เตะพุ่งทะลวง ใช้เลือดนิดหน่อย ถ้าแถบสีเหลืองเต็ม จะกลายเป็น <b>SUPER</b> กวาดทั้งจอ</li>
       <li>ทุบถังน้ำมันเพื่อหาพิซซ่ากับของเติมเลือด</li>
     </ul>
-    <p class="keys">คีย์บอร์ด: ลูกศร/WASD เดิน · J ตี · K โดด · L จับ · I พิเศษ · Esc หยุด</p>
+    <p class="keys">คีย์บอร์ด: ลูกศร/WASD เดิน · J ตี · K โดด · L จับ · I พิเศษ · U หมุน · Esc หยุด</p>
     <button class="btn btn-main" data-back>กลับ</button>
+  </div>
+</section>
+
+<section id="scrSelect" class="scr" hidden>
+  <div class="panel">
+    <h2>เลือกตัวละคร</h2>
+    <div class="chars" id="soloChars"></div>
+    <div class="menu">
+      <button class="btn btn-main" id="btnSoloGo">เริ่มเล่น</button>
+      <button class="btn btn-ghost" data-back>กลับ</button>
+    </div>
   </div>
 </section>
 
@@ -109,9 +125,10 @@
       <button class="btn btn-ghost small" id="btnShare">ส่งรหัสให้แฟน</button>
     </div>
     <div class="slots">
-      <div class="slot p1"><span class="dot"></span><b id="slot1">-</b><small>ผู้เล่น 1 · ผมแดง</small></div>
-      <div class="slot p2"><span class="dot"></span><b id="slot2">รอแฟนเข้าห้อง…</b><small>ผู้เล่น 2 · ผมฟ้า</small></div>
+      <div class="slot p1"><span class="dot"></span><b id="slot1">-</b><small id="slot1c">ผู้เล่น 1</small></div>
+      <div class="slot p2"><span class="dot"></span><b id="slot2">รอแฟนเข้าห้อง…</b><small id="slot2c">ผู้เล่น 2</small></div>
     </div>
+    <div class="pick-row"><span>ตัวละครของคุณ</span><div class="chars small" id="lobbyChars"></div></div>
     <p class="status" id="lobbyMsg" role="status"></p>
     <div class="menu">
       <button class="btn btn-main" id="btnStart" disabled>เริ่มเกม</button>

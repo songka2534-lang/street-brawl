@@ -60,7 +60,7 @@ function attachConn(conn) {
   const onOpen = () => {
     if (NET.open) return;
     NET.open = true; NET.lastRecv = performance.now();
-    conn.send({ t: 'hi', name: myName() });
+    conn.send({ t: 'hi', name: myName(), ch: APP.myChar });
     // a guest (re)joining a game already in progress goes straight in
     if (NET.role === 'host' && typeof G !== 'undefined' && G && G.mode === 'host') conn.send({ t: 'start' });
   };
@@ -71,6 +71,7 @@ function attachConn(conn) {
     NET.lastRecv = performance.now();
     if (m.t === 'in') { NET.rin = m; return; }
     if (m.t === 'hi') NET.remoteName = String(m.name || '').slice(0, 10);
+    if ((m.t === 'hi' || m.t === 'ch') && CHARS[m.ch]) NET.remoteChar = m.ch;
     const h = NET.handlers[m.t]; if (h) h(m);
   });
   const onClose = () => {
@@ -87,16 +88,16 @@ function netSend(m) { if (NET.conn && NET.open) { try { NET.conn.send(m); } catc
 function netClose() {
   try { if (NET.conn) NET.conn.close(); } catch (e) { /* */ }
   try { if (NET.peer) NET.peer.destroy(); } catch (e) { /* */ }
-  NET.peer = null; NET.conn = null; NET.open = false; NET.role = null; NET.rin = null; NET.rseen = null; NET.remoteName = '';
+  NET.peer = null; NET.conn = null; NET.open = false; NET.role = null; NET.rin = null; NET.rseen = null; NET.remoteName = ''; NET.remoteChar = '';
 }
 
 /* ---------- guest input encoding ---------- */
-const GI = { seq: { atk: 0, jmp: 0, grab: 0, sp: 0 }, last: '', t: 0 };
+const GI = { seq: { atk: 0, jmp: 0, grab: 0, sp: 0, sp2: 0 }, last: '', t: 0 };
 function guestSendInput(inp) {
   for (const b of BTN) if (inp[b + 'P']) GI.seq[b]++;
-  const bits = (inp.l ? 1 : 0) | (inp.r ? 2 : 0) | (inp.u ? 4 : 0) | (inp.d ? 8 : 0) | (inp.atk ? 16 : 0) | (inp.jmp ? 32 : 0) | (inp.grab ? 64 : 0) | (inp.sp ? 128 : 0);
-  const m = { t: 'in', b: bits, a: GI.seq.atk, j: GI.seq.jmp, g: GI.seq.grab, s: GI.seq.sp };
-  const key = [bits, m.a, m.j, m.g, m.s].join(',');
+  const bits = (inp.l ? 1 : 0) | (inp.r ? 2 : 0) | (inp.u ? 4 : 0) | (inp.d ? 8 : 0) | (inp.atk ? 16 : 0) | (inp.jmp ? 32 : 0) | (inp.grab ? 64 : 0) | (inp.sp ? 128 : 0) | (inp.sp2 ? 256 : 0);
+  const m = { t: 'in', b: bits, a: GI.seq.atk, j: GI.seq.jmp, g: GI.seq.grab, s: GI.seq.sp, k: GI.seq.sp2 };
+  const key = [bits, m.a, m.j, m.g, m.s, m.k].join(',');
   GI.t++;
   if (key !== GI.last || GI.t % 20 === 0) { GI.last = key; netSend(m); }
 }
@@ -104,14 +105,14 @@ function guestSendInput(inp) {
 /** Host: turn the guest's latest message into an input for this tick. */
 function hostRemoteInput() {
   const m = NET.rin;
-  const out = { l: 0, r: 0, u: 0, d: 0, atk: 0, jmp: 0, grab: 0, sp: 0, atkP: 0, jmpP: 0, grabP: 0, spP: 0 };
+  const out = { l: 0, r: 0, u: 0, d: 0, atk: 0, jmp: 0, grab: 0, sp: 0, sp2: 0, atkP: 0, jmpP: 0, grabP: 0, spP: 0, sp2P: 0 };
   if (!m) return out;
   const b = m.b | 0;
   out.l = b & 1 ? 1 : 0; out.r = b & 2 ? 1 : 0; out.u = b & 4 ? 1 : 0; out.d = b & 8 ? 1 : 0;
-  out.atk = b & 16 ? 1 : 0; out.jmp = b & 32 ? 1 : 0; out.grab = b & 64 ? 1 : 0; out.sp = b & 128 ? 1 : 0;
-  const seen = NET.rseen || (NET.rseen = { a: m.a, j: m.j, g: m.g, s: m.s });
-  out.atkP = m.a !== seen.a ? 1 : 0; out.jmpP = m.j !== seen.j ? 1 : 0; out.grabP = m.g !== seen.g ? 1 : 0; out.spP = m.s !== seen.s ? 1 : 0;
-  seen.a = m.a; seen.j = m.j; seen.g = m.g; seen.s = m.s;
+  out.atk = b & 16 ? 1 : 0; out.jmp = b & 32 ? 1 : 0; out.grab = b & 64 ? 1 : 0; out.sp = b & 128 ? 1 : 0; out.sp2 = b & 256 ? 1 : 0;
+  const seen = NET.rseen || (NET.rseen = { a: m.a, j: m.j, g: m.g, s: m.s, k: m.k });
+  out.atkP = m.a !== seen.a ? 1 : 0; out.jmpP = m.j !== seen.j ? 1 : 0; out.grabP = m.g !== seen.g ? 1 : 0; out.spP = m.s !== seen.s ? 1 : 0; out.sp2P = m.k !== seen.k ? 1 : 0;
+  seen.a = m.a; seen.j = m.j; seen.g = m.g; seen.s = m.s; seen.k = m.k;
   return out;
 }
 
