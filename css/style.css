@@ -85,6 +85,15 @@ input { font: 600 1.05rem var(--thai); color: var(--text); background: rgba(0,0,
 .chars.small canvas { width: 64px; height: 42px; }
 .pick-row { display: grid; gap: 6px; color: var(--muted); font-size: .9rem; }
 
+.pet-row { display: grid; grid-template-columns: auto auto 1fr auto; align-items: center; gap: 8px; border: 2px solid var(--line); border-radius: 12px; padding: 6px 10px; background: rgba(255,255,255,.04); }
+.pet-row .pet-label { grid-column: 1 / -1; color: var(--muted); font-size: .85rem; text-align: left; }
+.pet-row .pet-thumb { width: 96px; height: 66px; }
+.pet-row .pet-info { display: grid; text-align: left; gap: 2px; min-width: 0; }
+.pet-row .pet-sub { color: var(--muted); font-size: .8rem; }
+.pet-row .pet-prev { grid-column: 1; grid-row: 2; } .pet-row .pet-thumb { grid-column: 2; grid-row: 2; }
+.pet-row .pet-info { grid-column: 3; grid-row: 2; } .pet-row .pet-next { grid-column: 4; grid-row: 2; }
+.my-level { margin-top: -4px; }
+
 /* ---------- touch controls ---------- */
 #touch { position: fixed; inset: 0; z-index: 10; pointer-events: none; }
 #stickZone { position: absolute; left: 0; top: 30%; bottom: 0; width: 45%; pointer-events: auto; touch-action: none; }

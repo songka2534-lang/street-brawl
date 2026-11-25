@@ -3,3 +3,7 @@
 - Universal Animation Library  https://quaternius.itch.io/universal-animation-library
 - Universal Animation Library 2  https://quaternius.itch.io/universal-animation-library-2
 Files were re-exported here with smaller textures and only the animations the game uses.
+Pets (assets/3d/pets) by Quaternius, CC0 1.0, converted from FBX to glTF:
+- LowPoly Animated Animals  https://quaternius.itch.io/lowpoly-animated-animals
+- Animated LowPoly Dinosaurs  https://quaternius.itch.io/animated-lowpoly-dinosaurs
+- LowPoly Animated Monsters  https://quaternius.itch.io/lowpoly-animated-monsters

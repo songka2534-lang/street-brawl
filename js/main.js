@@ -4,6 +4,42 @@
 const $ = (s) => document.querySelector(s);
 const APP = { screen: 'title', lastPhase: null, endShown: false, tick: 0, prevScreen: 'scrTitle', myChar: 'girl' };
 
+/* ---------- saved progress (level + pets) ---------- */
+function loadSave() {
+  const d = { lvl: 1, exp: 0, pet: 'hunter', pets: {} };
+  try { return Object.assign(d, JSON.parse(localStorage.getItem('sb-save') || '{}')); } catch (e) { return d; }
+}
+APP.save = loadSave();
+function writeSave() { try { localStorage.setItem('sb-save', JSON.stringify(APP.save)); } catch (e) { /* private mode */ } }
+function myProg() { const pet = PET_LINES[APP.save.pet] ? APP.save.pet : 'hunter'; return { lvl: APP.save.lvl, exp: APP.save.exp, pet: window.__INIT3D ? pet : null, petExp: APP.save.pets[pet] || 0 }; }
+function syncSave() {
+  if (!G || !G.players) return;
+  const me = G.players[G.mode === 'guest' ? 1 : 0];
+  if (!me || me.lvl === undefined) return;
+  if (me.lvl < APP.save.lvl || (me.lvl === APP.save.lvl && me.exp < APP.save.exp && G.mode === 'guest')) return;
+  APP.save.lvl = me.lvl; APP.save.exp = me.exp;
+  if (me.petLine) APP.save.pets[me.petLine] = Math.max(APP.save.pets[me.petLine] || 0, Math.floor(me.petExp || 0));
+  writeSave();
+}
+
+/* ---------- pet pick (3D only) ---------- */
+function petStep(d) {
+  const i = PET_ORDER.indexOf(APP.save.pet);
+  APP.save.pet = PET_ORDER[(i + d + PET_ORDER.length) % PET_ORDER.length];
+  writeSave(); updatePetRows();
+  if (NET.open) netSend({ t: 'ch', ch: APP.myChar, prog: myProg() });
+}
+function updatePetRows() {
+  const L = PET_LINES[APP.save.pet], exp = APP.save.pets[APP.save.pet] || 0, f = petForm(exp);
+  const next = f < 2 ? `EXP ${exp}/${PET.exp[f + 1]}` : 'ร่างสุดท้าย';
+  for (const row of document.querySelectorAll('.pet-row')) {
+    row.querySelector('.pet-name').textContent = `${L.name} · ${L.forms[f].name}`;
+    row.querySelector('.pet-sub').textContent = `ร่าง ${f + 1}/3 · ${next}`;
+  }
+  const lv = document.querySelectorAll('.my-level');
+  lv.forEach((e) => { e.textContent = `เลเวลของคุณ: ${APP.save.lvl}`; });
+}
+
 /* ---------- character pick ---------- */
 function palFor(pn, ch, otherCh) { const C = CHARS[ch] || CHARS.girl; return pn === 1 && ch === otherCh ? C.pals[1] : C.pals[0]; }
 function buildCharButtons(box, pnFn) {
@@ -23,7 +59,7 @@ function buildCharButtons(box, pnFn) {
 }
 function pickChar(ch) {
   APP.myChar = ch; store('sb-char', ch); markChars();
-  if (NET.open) netSend({ t: 'ch', ch });
+  if (NET.open) netSend({ t: 'ch', ch, prog: myProg() });
   updateSlots();
 }
 function markChars() { for (const b of document.querySelectorAll('.char')) b.setAttribute('aria-pressed', String(b.dataset.ch === APP.myChar)); }
@@ -81,15 +117,19 @@ function enterGame() {
 function startSolo() {
   audioUnlock();
   G = newWorld('solo');
-  G.players = [newPlayer(0, myName(), APP.myChar)];
+  G.petsOn = !!window.__INIT3D;
+  G.players = [newPlayer(0, myName(), APP.myChar, null, myProg())];
+  G.players.forEach(makePet);
   startStage(0);
   enterGame();
 }
 
 function startHostGame() {
   G = newWorld('host');
-  G.players = [newPlayer(0, myName(), APP.myChar, palFor(0, APP.myChar))];
-  if (NET.open) { const rc = NET.remoteChar || 'girl'; G.players.push(newPlayer(1, NET.remoteName || 'แฟน', rc, palFor(1, rc, APP.myChar))); }
+  G.petsOn = !!window.__INIT3D;
+  G.players = [newPlayer(0, myName(), APP.myChar, palFor(0, APP.myChar), myProg())];
+  if (NET.open) { const rc = NET.remoteChar || 'girl'; G.players.push(newPlayer(1, NET.remoteName || 'แฟน', rc, palFor(1, rc, APP.myChar), NET.remoteProg)); }
+  G.players.forEach(makePet);
   startStage(0);
   netSend({ t: 'start' });
   enterGame();
@@ -102,6 +142,7 @@ function startGuestGame() {
 }
 
 function quitToTitle(msg) {
+  syncSave();
   if (NET.role === 'host') netSend({ t: 'quit' });
   netClose();
   G = null;
@@ -140,6 +181,7 @@ function tick() {
     guestSmooth();
   }
   watchPhase();
+  if (APP.tick % 300 === 0) syncSave();
   const me = G.players[G.mode === 'guest' ? 1 : 0];
   const ready = me && me.meter >= 100;
   const sp = document.querySelector('.pad-sp'); if (sp) sp.classList.toggle('ready', !!ready);
@@ -149,8 +191,8 @@ function hostManageGuest() {
   const p2 = G.players[1];
   if (NET.open) {
     const rc = NET.remoteChar || 'girl';
-    if (p2 && p2.gone && p2.ch !== rc) { G.players.length = 1; return; }
-    if (!p2) { const p = newPlayer(1, NET.remoteName || 'แฟน', rc, palFor(1, rc, G.players[0].ch)); p.st = 'respawn'; p.y = -170; p.x = G.camX + 150; p.inv = 200; G.players.push(p); fx('bn', 0, 0, 0, 'PLAYER 2|' + p.name + ' เข้าร่วมแล้ว!'); }
+    if (p2 && p2.gone && p2.ch !== rc) { G.players.length = 1; G.pets = G.pets.filter((q) => q.owner !== 1); return; }
+    if (!p2) { const p = newPlayer(1, NET.remoteName || 'แฟน', rc, palFor(1, rc, G.players[0].ch), NET.remoteProg); p.st = 'respawn'; p.y = -170; p.x = G.camX + 150; p.inv = 200; G.players.push(p); makePet(p); fx('bn', 0, 0, 0, 'PLAYER 2|' + p.name + ' เข้าร่วมแล้ว!'); }
     else if (p2.gone) { p2.gone = false; p2.active = true; p2.lives = Math.max(1, p2.lives); p2.hp = p2.maxHp; p2.st = 'respawn'; p2.t = 0; p2.y = -170; p2.vy = 0; p2.x = G.camX + 150; p2.inv = 200; p2.name = NET.remoteName || p2.name; }
   } else if (p2 && !p2.gone) {
     p2.gone = true; p2.active = false;
@@ -162,6 +204,7 @@ function watchPhase() {
   if (APP.screen !== 'game' && APP.screen !== 'scrOver' && APP.screen !== 'scrPause') return;
   const ph = G.phase;
   if (ph === APP.lastPhase && !(ph === 'end' && !APP.endShown)) return;
+  syncSave();
   if (ph === 'over') {
     APP.lastPhase = ph;
     $('#overTitle').textContent = 'GAME OVER';
@@ -211,7 +254,7 @@ async function doHost() {
     $('#shareRow').hidden = false;
     setMsg($('#lobbyMsg'), 'ส่งรหัสให้แฟน แล้วรอให้แฟนกด "เข้าห้อง" กดเริ่มก่อนก็ได้ แฟนจะเข้ามาร่วมกลางเกม');
     setMsg(msg, '');
-    show('scrLobby');
+    updatePetRows(); show('scrLobby');
   } catch (e) { setMsg(msg, netErrorText(e), true); }
   $('#btnHost').disabled = false;
 }
@@ -234,7 +277,7 @@ async function doJoin() {
     $('#btnStart').hidden = true; $('#shareRow').hidden = true;
     setMsg($('#lobbyMsg'), 'เข้าห้องแล้ว! รอแฟนกดเริ่มเกม');
     setMsg(msg, '');
-    show('scrLobby');
+    updatePetRows(); show('scrLobby');
   } catch (e) { setMsg(msg, netErrorText(e), true); netClose(); }
   $('#btnJoin').disabled = false;
 }
@@ -294,7 +337,10 @@ function wire() {
   const sc = store('sb-char'); if (sc && CHARS[sc]) APP.myChar = sc;
   buildCharButtons($('#soloChars'), () => 0);
   buildCharButtons($('#lobbyChars'), () => (NET.role === 'guest' ? 1 : 0));
-  $('#goSolo').onclick = () => { audioUnlock(); store('sb-name', myName()); markChars(); show('scrSelect'); };
+  $('#goSolo').onclick = () => { audioUnlock(); store('sb-name', myName()); markChars(); updatePetRows(); show('scrSelect'); };
+  for (const b of document.querySelectorAll('.pet-prev')) b.onclick = () => petStep(-1);
+  for (const b of document.querySelectorAll('.pet-next')) b.onclick = () => petStep(1);
+  updatePetRows();
   $('#btnSoloGo').onclick = () => startSolo();
   $('#goOnline').onclick = () => { audioUnlock(); store('sb-name', myName()); setMsg($('#onlineMsg'), ''); show('scrOnline'); };
   $('#goHelp').onclick = () => { audioUnlock(); show('scrHelp'); };

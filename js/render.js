@@ -185,6 +185,18 @@ function playFx(e) {
     case 'go': sfx('go'); break;
     case 'wbrk': for (let i = 0; i < 7; i++) addPart({ type: 'chunk', x: x + rnd(-6, 6), y: rnd(-30, -16), z, vx: rnd(-2.2, 2.2), vy: rnd(-3.5, -1), life: 0, max: 40, size: 2 + Math.random() * 2, col: ['#b07a40', '#a8b0bc', '#e8c088'][i % 3], rot: 0 }); sfx('brk'); break;
     case 'taunt': floatText(x, y, z, '♪', '#ff6fd8', true); sfx('lvl'); break;
+    case 'lvlup':
+      floatText(x, y, z, 'LEVEL UP! ' + a, '#34e6ff', true); sfx('lvl'); flash(0.12, '#34e6ff');
+      for (let i = 0; i < 2; i++) addPart({ type: 'ring', x, y: -24, z, life: -i * 6, max: 22, size: 40 + i * 20, col: '#34e6ff' });
+      burst(x, -30, z, 20, { cols: ['#ffffff', '#34e6ff', '#ffd23f'], speed: 3 }); break;
+    case 'evo':
+      flash(0.6); shake(6); sfx('sup');
+      for (let i = 0; i < 3; i++) addPart({ type: 'ring', x, y, z, life: -i * 8, max: 30, size: 50 + i * 30, col: i ? '#ffd23f' : '#ffffff' });
+      burst(x, y, z, 30, { cols: ['#ffffff', '#ffd23f', '#34e6ff'], speed: 4, life: 26 }); break;
+    case 'roar':
+      addPart({ type: 'shock', x, y: 0, z, life: 0, max: 26, size: 100 });
+      addPart({ type: 'ring', x, y: -20, z, life: 0, max: 20, size: 60, col: '#ff9d1f' });
+      sfx('slam'); shake(7); break;
     case 'spin':
       sfx('sp'); addPart({ type: 'ring', x, y, z, life: 0, max: 16, size: 48, col: '#aee6ff' });
       burst(x, y, z, 16, { cols: ['#ffffff', '#aee6ff', '#ffd23f'], speed: 3.4 }); shake(3); break;
@@ -645,7 +657,8 @@ function playerPanel(p, i) {
   const bx = right ? x0 : x0 + 30;
   // name + level
   hudFont(8, THAI, 600); ctx.textAlign = right ? 'right' : 'left';
-  outlinedText(p.name || (i ? 'P2' : 'P1'), right ? bx + 100 : bx, y0 + 7, '#fff', '#000', 3);
+  const nm = (p.name || (i ? 'P2' : 'P1')) + (p.lvl ? '  LV' + p.lvl : '');
+  outlinedText(nm, right ? bx + 100 : bx, y0 + 7, '#fff', '#000', 3);
   hudFont(6, PIX); ctx.textAlign = right ? 'left' : 'right';
   outlinedText(String(p.score || 0).padStart(7, '0'), right ? bx : bx + 100, y0 + 7, '#ffd23f', '#000', 2.5);
   // hp bar
@@ -671,6 +684,11 @@ function playerPanel(p, i) {
   // lives
   hudFont(6, PIX); ctx.textAlign = right ? 'left' : 'right';
   outlinedText('x' + Math.max(0, p.lives || 0), right ? bx : bx + w, my + 11, '#fff', '#000', 2.5);
+  if (p.lvl) {
+    const er = p.lvl >= LEVEL.max ? 1 : clamp((p.exp || 0) / LEVEL.need(p.lvl), 0, 1);
+    ctx.fillStyle = 'rgba(0,0,0,0.7)'; ctx.fillRect(bx - 1, my + 3.5, w + 2, 2.5);
+    ctx.fillStyle = '#34e6ff'; if (right) ctx.fillRect(bx + w - w * er, my + 4, w * er, 1.5); else ctx.fillRect(bx, my + 4, w * er, 1.5);
+  }
   if (p.st === 'out') { hudFont(8, PIX); ctx.textAlign = 'center'; outlinedText('GAME OVER', bx + w / 2, by + 6, '#ff3b5c', '#000', 3); }
   ctx.restore();
 }

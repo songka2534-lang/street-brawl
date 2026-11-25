@@ -60,7 +60,7 @@ function attachConn(conn) {
   const onOpen = () => {
     if (NET.open) return;
     NET.open = true; NET.lastRecv = performance.now();
-    conn.send({ t: 'hi', name: myName(), ch: APP.myChar });
+    conn.send({ t: 'hi', name: myName(), ch: APP.myChar, prog: myProg() });
     // a guest (re)joining a game already in progress goes straight in
     if (NET.role === 'host' && typeof G !== 'undefined' && G && G.mode === 'host') conn.send({ t: 'start' });
   };
@@ -72,6 +72,7 @@ function attachConn(conn) {
     if (m.t === 'in') { NET.rin = m; return; }
     if (m.t === 'hi') NET.remoteName = String(m.name || '').slice(0, 10);
     if ((m.t === 'hi' || m.t === 'ch') && CHARS[m.ch]) NET.remoteChar = m.ch;
+    if ((m.t === 'hi' || m.t === 'ch') && m.prog && typeof m.prog === 'object') NET.remoteProg = { lvl: m.prog.lvl | 0, exp: m.prog.exp | 0, pet: PET_LINES[m.prog.pet] ? m.prog.pet : null, petExp: m.prog.petExp | 0 };
     const h = NET.handlers[m.t]; if (h) h(m);
   });
   const onClose = () => {

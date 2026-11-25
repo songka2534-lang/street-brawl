@@ -829,6 +829,149 @@
     }
   }
 
+
+  /* ---------- pets ---------- */
+  R.petGltf = {}; R.petLoad = {}; R.petBaseH = {}; R.petThumbs = {};
+  const PET_YAW = {};   // per-model correction if a model does not face +Z
+  function loadPet(m) {
+    if (!R.petLoad[m]) R.petLoad[m] = loadGLB('assets/3d/pets/' + m + '.glb').then((g) => {
+      R.petGltf[m] = g;
+      const box = new THREE.Box3().setFromObject(g.scene); R.petBaseH[m] = Math.max(0.01, box.max.y - box.min.y);
+      return g;
+    }).catch((e) => { console.error('pet', m, e); });
+    return R.petLoad[m];
+  }
+  function petClip(g, kind) {
+    const A = g.animations, f = (re) => A.find((c) => re.test(c.name));
+    const fly = f(/flying/i);
+    switch (kind) {
+      case 'idle': return f(/idle/i) || fly || A[0];
+      case 'walk': return fly || f(/_?walk(?!slow)/i) || f(/run/i) || f(/jump/i) || A[0];
+      case 'run': return fly || f(/run/i) || f(/walk/i) || f(/jump/i) || A[0];
+      case 'atk': return f(/attack(?!2)/i) || f(/jump/i) || A[0];
+      case 'roar': return f(/attack2/i) || f(/attack/i) || f(/jump/i) || A[0];
+      default: return f(/idle/i) || A[0];
+    }
+  }
+  function makePetView(line, form) {
+    const F = PET_LINES[line].forms[form], g = R.petGltf[F.m];
+    const model = THREE.SkeletonUtils.clone(g.scene);
+    const mats = [], skinned = [];
+    model.traverse((o) => {
+      if (!o.isMesh) return;
+      o.frustumCulled = false; o.castShadow = false;
+      const src = Array.isArray(o.material) ? o.material : [o.material];
+      const out = src.map((m) => { const t = new THREE.MeshToonMaterial({ color: m.color ? m.color.clone() : new THREE.Color(0xffffff), gradientMap: R.gradient, map: m.map || null }); mats.push(t); return t; });
+      o.material = Array.isArray(o.material) ? out : out[0];
+      if (o.isSkinnedMesh) skinned.push(o);
+    });
+    for (const o of skinned) { const ol = new THREE.SkinnedMesh(o.geometry, outlineMat()); ol.bind(o.skeleton, o.bindMatrix); ol.frustumCulled = false; o.parent.add(ol); }
+    const sc = F.h / (R.petBaseH[F.m] || 1);
+    model.scale.multiplyScalar(sc);
+    model.rotation.y = PET_YAW[F.m] || 0;
+    const pitch = new THREE.Group(); pitch.add(model);
+    const yaw = new THREE.Group(); yaw.add(pitch);
+    const root = new THREE.Group(); root.add(yaw);
+    if (F.crown) {
+      const gold = new THREE.MeshToonMaterial({ color: 0xffd23f, emissive: 0x4a3000, gradientMap: R.gradient });
+      const crown = new THREE.Group();
+      const band = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.25, 0.14, 12, 1, true), gold); crown.add(band);
+      for (let i = 0; i < 5; i++) { const sp = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.18, 6), gold); const a = (i / 5) * Math.PI * 2; sp.position.set(Math.cos(a) * 0.22, 0.15, Math.sin(a) * 0.22); crown.add(sp); }
+      crown.position.y = F.h * 0.98; crown.scale.setScalar(F.h * 0.9); root.add(crown); mats.push(gold);
+    }
+    const blob = new THREE.Mesh(BLOB_GEO, BLOB_MAT); blob.rotation.x = -Math.PI / 2;
+    const mixer = new THREE.AnimationMixer(model);
+    const v = { root, yaw, pitch, model, mats, mixer, cur: null, key: '', blob, yawNow: Math.PI / 2, spin: 0, roll: 0, pet: true, g, F, line, form };
+    R.scene.add(root); R.scene.add(blob);
+    return v;
+  }
+  function animPet(v, q) {
+    const g = v.g, kind = q.st === 'evolve' ? 'idle' : q.st;
+    const clip = petClip(g, kind);
+    if (!clip) return;
+    const key = clip.name + '|' + (kind === 'atk' || kind === 'roar' ? q.st + q.id + (q.tgt || '') : '');
+    if (v.key === key) return;
+    v.key = key;
+    const a = v.mixer.clipAction(clip), prev = v.cur;
+    a.reset();
+    const once = kind === 'atk' || kind === 'roar';
+    a.setLoop(once ? THREE.LoopOnce : THREE.LoopRepeat, Infinity); a.clampWhenFinished = once;
+    a.timeScale = once ? clip.duration / (kind === 'roar' ? 0.66 : 0.36) : kind === 'run' ? 1.3 : 1;
+    a.play(); if (prev && prev !== a) a.crossFadeFrom(prev, 0.12, false);
+    v.cur = a;
+  }
+  function placePet(v, q, dt) {
+    const x = wx(q.x), y = wy(q.y), z = wz(q.z);
+    v.root.position.set(x, y, z);
+    v.blob.position.set(x, 0.015, z); v.blob.scale.setScalar(Math.max(0.5, v.F.h * 0.9));
+    const target = q.face > 0 ? Math.PI / 2 : -Math.PI / 2;
+    let d = target - v.yawNow; while (d > Math.PI) d -= 2 * Math.PI; while (d < -Math.PI) d += 2 * Math.PI;
+    v.yawNow += d * Math.min(1, dt * 10);
+    const evo = q.st === 'evolve';
+    v.spin = evo ? v.spin + dt * 14 : 0;
+    v.yaw.rotation.y = v.yawNow + v.spin;
+    const pulse = evo ? 1 + Math.sin(RFRAME * 0.6) * 0.15 : 1;
+    v.pitch.scale.setScalar(pulse);
+    let em = evo ? 0.5 + 0.4 * Math.sin(RFRAME * 0.5) : 0;
+    const aura = v.F.aura;
+    for (const m of v.mats) {
+      if (aura && !evo) { m.emissive.setHex(aura); m.emissiveIntensity = 0.18 + 0.1 * Math.sin(RFRAME * 0.2); }
+      else { m.emissive.setRGB(em, em, em); m.emissiveIntensity = 1; }
+    }
+    if (aura && RFRAME % 3 === 0) addPart({ type: 'flame', x: q.x + rnd(-14, 14) * v.F.h, y: q.y - rnd(4, 40) * v.F.h, z: q.z, vx: 0, vy: -rnd(0.4, 1.1), life: 0, max: 18, col: '#' + new THREE.Color(aura).getHexString(), size: 2 });
+    if (evo && RFRAME % 2 === 0) addPart({ type: 'spark', x: q.x + rnd(-20, 20), y: q.y - rnd(0, 50), z: q.z, vx: rnd(-1, 1), vy: -rnd(1, 2.5), life: 0, max: 20, col: ['#ffffff', '#ffd23f', '#34e6ff'][RFRAME % 3], size: 1 });
+  }
+  function syncPets(dt, mixDt, seen) {
+    for (const q of G.pets || []) {
+      if (q.hide || q.x === undefined || !PET_LINES[q.line]) continue;
+      const F = PET_LINES[q.line].forms[q.form | 0];
+      if (!R.petGltf[F.m]) { loadPet(F.m); continue; }
+      const key = 'q' + q.id + ':' + q.form;
+      let v = R.views.get(key);
+      if (!v) { v = makePetView(q.line, q.form | 0); R.views.set(key, v); }
+      seen.add(key);
+      animPet(v, q); placePet(v, q, dt); v.mixer.update(mixDt);
+    }
+  }
+  function petThumb(line, form) {
+    const k = line + form;
+    if (R.petThumbs[k]) return R.petThumbs[k];
+    const F = PET_LINES[line].forms[form];
+    if (!R.petGltf[F.m]) { loadPet(F.m); return null; }
+    const v = makePetView(line, form);
+    const h = F.h;
+    v.mixer.clipAction(petClip(v.g, 'idle')).play(); v.mixer.update(0.3);
+    const sc = new THREE.Scene();
+    sc.add(new THREE.HemisphereLight(0xffffff, 0x404050, 1.1));
+    const dl = new THREE.DirectionalLight(0xffffff, 0.8); dl.position.set(2, 4, 5); sc.add(dl);
+    R.scene.remove(v.root); R.scene.remove(v.blob); sc.add(v.root);
+    v.root.position.set(0, PET_LINES[line].fly ? -h * 0.1 : 0, 0); v.yaw.rotation.y = Math.PI / 2 + 0.45;
+    const cam = new THREE.PerspectiveCamera(30, 160 / 110, 0.05, 200);
+    const box = new THREE.Box3().setFromObject(v.root); const c = box.getCenter(new THREE.Vector3()); const size = box.getSize(new THREE.Vector3());
+    const dist = Math.max(size.x, size.y * 1.45, size.z) * 1.9 + 0.3;
+    cam.position.set(c.x + dist * 0.25, c.y + dist * 0.18, c.z + dist); cam.lookAt(c);
+    const rt = new THREE.WebGLRenderTarget(160, 110); rt.texture.encoding = THREE.sRGBEncoding;
+    R.renderer.setRenderTarget(rt); R.renderer.setClearColor(0x000000, 0); R.renderer.clear(); R.renderer.render(sc, cam);
+    const px = new Uint8Array(160 * 110 * 4); R.renderer.readRenderTargetPixels(rt, 0, 0, 160, 110, px); R.renderer.setRenderTarget(null); rt.dispose();
+    const cv2 = document.createElement('canvas'); cv2.width = 160; cv2.height = 110;
+    const g2 = cv2.getContext('2d'), id = g2.createImageData(160, 110);
+    for (let y = 0; y < 110; y++) id.data.set(px.subarray((109 - y) * 640, (110 - y) * 640), y * 640);
+    g2.putImageData(id, 0, 0);
+    sc.remove(v.root); v.mixer.stopAllAction(); for (const m of v.mats) m.dispose();
+    R.petThumbs[k] = cv2;
+    return cv2;
+  }
+  function drawPetRows() {
+    const rows = document.querySelectorAll('.pet-row');
+    if (!rows.length || (APP.screen !== 'scrSelect' && APP.screen !== 'scrLobby')) return;
+    const line = APP.save.pet, f = petForm(APP.save.pets[line] || 0);
+    const th = petThumb(line, f);
+    for (const r of rows) {
+      const c = r.querySelector('.pet-thumb'); const g = c.getContext('2d'); g.clearRect(0, 0, c.width, c.height);
+      if (th) g.drawImage(th, 0, Math.sin(RFRAME * 0.08) * 2); else { g.fillStyle = '#a99cc9'; g.font = '14px Kanit, sans-serif'; g.textAlign = 'center'; g.fillText('กำลังโหลด…', 80, 60); }
+    }
+  }
+
   /* ---------- per-frame sync ---------- */
   function syncWorld(dt) {
     const seen = new Set();
@@ -854,6 +997,7 @@
       animEnemy(v, e); placeView(v, e, false, dt); v.mixer.update(mixDt);
       if (e.rage && RFRAME % 3 === 0) addPart({ type: 'flame', x: e.x + rnd(-14, 14), y: e.y - rnd(4, 60), z: e.z, vx: 0, vy: -rnd(0.4, 1.2), life: 0, max: 18, col: FIRE[2 + Math.floor(Math.random() * 3)], size: 2 });
     }
+    syncPets(dt, mixDt, seen);
     for (const [k, v] of R.views) if (!seen.has(k)) { dropView(v); R.views.delete(k); }
     // barrels
     const bs = new Set();
@@ -1045,6 +1189,7 @@
   }
   function drawPreviews3D() {
     if (APP.screen !== 'scrSelect' && APP.screen !== 'scrLobby') return;
+    drawPetRows();
     for (const box of [document.getElementById('soloChars'), document.getElementById('lobbyChars')]) {
       if (!box || box.closest('.scr').hidden) continue;
       const pn = box._pn ? box._pn() : 0;
@@ -1059,5 +1204,5 @@
     }
   }
   // hooks for automated visual checks
-  window.__R3D = { R, makeView, attachWeapon, snap, dropView, W_ROT, W_POS };
+  window.__R3D = { R, makeView, attachWeapon, snap, dropView, W_ROT, W_POS, loadPet, petThumb, PET_YAW };
 })();

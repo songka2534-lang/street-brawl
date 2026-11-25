@@ -82,6 +82,8 @@
       <li><b>อาวุธ</b> เดินทับไม้เบสบอลหรือท่อเหล็กเพื่อเก็บ กด <b>ตี</b> เพื่อฟาด กด <b>จับ</b> เพื่อขว้าง ฟาดประมาณ 10 ครั้งอาวุธจะหัก</li>
       <li><b>กลิ้งหลบ</b> โยกจอยลงค้างไว้แล้วกด <b>โดด</b> ระหว่างกลิ้งศัตรูตีไม่โดน</li>
       <li><b>ยั่ว</b> ตอนไม่มีศัตรูใกล้ กด <b>จับ</b> ค้างไว้ เติมแถบ Super</li>
+      <li><b>เลเวล</b> ตีศัตรูเพื่อเก็บ EXP เลเวลบันทึกไว้ในเครื่อง เลเวล 10 ขึ้นไป ท่า Super จะมีสัตว์เลี้ยงช่วย</li>
+      <li><b>สัตว์เลี้ยง</b> เลือกได้ที่หน้าเลือกตัวละคร มันช่วยสู้เองและวิวัฒนาการ 3 ร่างจากเล็กไปใหญ่</li>
       <li><b>โดด</b> แล้วกด <b>ตี</b> กลางอากาศ เป็นกระโดดเตะ</li>
       <li><b>จับ</b> เมื่อยืนชิดศัตรู กด <b>ตี</b> เพื่อเข่า แล้วกด <b>จับ</b> อีกครั้งเพื่อทุ่มใส่ศัตรูตัวอื่น</li>
       <li><b>หมุน</b> เตะหมุนพายุ กวาดศัตรูทั้งซ้ายและขวาให้ล้ม ใช้เลือดเล็กน้อย</li>
@@ -97,6 +99,14 @@
   <div class="panel">
     <h2>เลือกตัวละคร</h2>
     <div class="chars" id="soloChars"></div>
+    <div class="pet-row" id="petSolo">
+      <span class="pet-label">สัตว์เลี้ยง</span>
+      <button class="btn btn-ghost small pet-prev" aria-label="สัตว์เลี้ยงก่อนหน้า">◀</button>
+      <canvas class="pet-thumb" width="160" height="110"></canvas>
+      <div class="pet-info"><b class="pet-name">-</b><small class="pet-sub">-</small></div>
+      <button class="btn btn-ghost small pet-next" aria-label="สัตว์เลี้ยงถัดไป">▶</button>
+    </div>
+    <p class="my-level hint"></p>
     <div class="menu">
       <button class="btn btn-main" id="btnSoloGo">เริ่มเล่น</button>
       <button class="btn btn-ghost" data-back>กลับ</button>
@@ -135,6 +145,14 @@
       <div class="slot p2"><span class="dot"></span><b id="slot2">รอแฟนเข้าห้อง…</b><small id="slot2c">ผู้เล่น 2</small></div>
     </div>
     <div class="pick-row"><span>ตัวละครของคุณ</span><div class="chars small" id="lobbyChars"></div></div>
+    <div class="pet-row" id="petLobby">
+      <span class="pet-label">สัตว์เลี้ยง</span>
+      <button class="btn btn-ghost small pet-prev" aria-label="สัตว์เลี้ยงก่อนหน้า">◀</button>
+      <canvas class="pet-thumb" width="160" height="110"></canvas>
+      <div class="pet-info"><b class="pet-name">-</b><small class="pet-sub">-</small></div>
+      <button class="btn btn-ghost small pet-next" aria-label="สัตว์เลี้ยงถัดไป">▶</button>
+    </div>
+    <p class="my-level hint"></p>
     <p class="status" id="lobbyMsg" role="status"></p>
     <div class="menu">
       <button class="btn btn-main" id="btnStart" disabled>เริ่มเกม</button>

@@ -156,3 +156,25 @@ const TILES = {
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 const rnd = (a, b) => a + Math.random() * (b - a);
 function seeded(seed) { let s = seed >>> 0 || 1; return () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296); }
+
+/* ---------- player levels (saved on the device) ---------- */
+const LEVEL = { max: 30, need: (l) => 400 + 30 * l * l, hp: 4, dmg: 0.025, meter: 0.02, superPet: 10 };
+
+/* ---------- pets (3D version only): three forms each, small to big ----------
+   m = model file in assets/3d/pets, h = height in metres, aura = glow colour of the final form */
+const PET = { exp: [0, 1500, 9000], dmg: [5, 10, 17], cool: [80, 64, 52], speed: [1.9, 2.15, 2.4], reach: [22, 30, 40], roarEvery: 420, roarDmg: 22 };
+const PET_LINES = {
+  hunter: { name: 'สายนักล่า', forms: [{ m: 'raptor', h: 0.9, name: 'แรปเตอร์' }, { m: 'trex', h: 1.8, name: 'ทีเร็กซ์' }, { m: 'trex', h: 2.9, name: 'ทีเร็กซ์เพลิง', aura: 0xff5a1f }] },
+  armor:  { name: 'สายเกราะ', forms: [{ m: 'stego', h: 0.85, name: 'สเตโกซอรัส' }, { m: 'trike', h: 1.45, name: 'ไทรเซอราทอปส์' }, { m: 'apato', h: 3.0, name: 'อะแพโทซอรัสยักษ์', aura: 0xffd23f }] },
+  duck:   { name: 'สายปากเป็ด', forms: [{ m: 'para', h: 0.9, name: 'พาราซอร์จิ๋ว' }, { m: 'para', h: 1.6, name: 'พาราซอร์' }, { m: 'para', h: 2.7, name: 'พาราซอร์สายฟ้า', aura: 0x34e6ff }] },
+  dragon: { name: 'สายมังกร', fly: true, forms: [{ m: 'bat', h: 0.6, name: 'ค้างคาว' }, { m: 'dragon', h: 1.2, name: 'มังกร' }, { m: 'dragon', h: 2.3, name: 'มังกรไฟ', aura: 0xff3a1f }] },
+  slime:  { name: 'สายสไลม์', forms: [{ m: 'slime', h: 0.4, name: 'สไลม์จิ๋ว' }, { m: 'slime', h: 0.85, name: 'สไลม์' }, { m: 'slime', h: 1.7, name: 'ราชาสไลม์', aura: 0x7dff5a, crown: true }] },
+  bone:   { name: 'สายกระดูก', forms: [{ m: 'skeleton', h: 0.9, name: 'โครงกระดูกจิ๋ว' }, { m: 'skeleton', h: 1.5, name: 'โครงกระดูก' }, { m: 'skeleton', h: 2.6, name: 'อัศวินกระดูก', aura: 0xb46aff }] },
+  farm:   { name: 'สายฟาร์ม', forms: [{ m: 'pug', h: 0.55, name: 'ปั๊ก' }, { m: 'zebra', h: 1.5, name: 'ม้าลาย' }, { m: 'horse', h: 2.3, name: 'ม้าศึก', aura: 0xffd23f }] },
+  cow:    { name: 'สายวัว', forms: [{ m: 'cow', h: 0.75, name: 'ลูกวัว' }, { m: 'cow', h: 1.3, name: 'วัว' }, { m: 'cow', h: 2.2, name: 'วัวยักษ์', aura: 0xff6fd8 }] },
+  sheep:  { name: 'สายแกะ', forms: [{ m: 'sheep', h: 0.5, name: 'ลูกแกะ' }, { m: 'sheep', h: 0.95, name: 'แกะ' }, { m: 'sheep', h: 1.8, name: 'แกะยักษ์', aura: 0xffffff }] },
+  pig:    { name: 'สายหมู', forms: [{ m: 'pig', h: 0.45, name: 'ลูกหมู' }, { m: 'pig', h: 0.85, name: 'หมู' }, { m: 'pig', h: 1.7, name: 'หมูยักษ์', aura: 0xff9aa8 }] },
+  llama:  { name: 'สายลามะ', forms: [{ m: 'llama', h: 0.8, name: 'ลามะน้อย' }, { m: 'llama', h: 1.4, name: 'ลามะ' }, { m: 'llama', h: 2.4, name: 'ลามะยักษ์', aura: 0x34e6ff }] },
+};
+const PET_ORDER = Object.keys(PET_LINES);
+function petForm(exp) { return exp >= PET.exp[2] ? 2 : exp >= PET.exp[1] ? 1 : 0; }

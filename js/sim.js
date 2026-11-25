@@ -9,21 +9,25 @@ let G = null;
 function newWorld(mode) {
   return {
     mode, frame: 0, stage: 0, camX: 0, lockX: null, waveIdx: 0, wave: null, goT: 0,
-    players: [], enemies: [], items: [], barrels: [], proj: [],
+    players: [], enemies: [], items: [], barrels: [], proj: [], pets: [], petsOn: false,
     fxLog: [], fxId: 0, nid: 1,
     phase: 'play', phaseT: 0, hitstop: 0, slowmo: 0, superT: 0, superBy: -1,
     lastEnemy: 0, lastEnemyT: 0, song: null, paused: false,
   };
 }
 
-function newPlayer(pn, name, ch, pal) {
+function newPlayer(pn, name, ch, pal, prog) {
   ch = CHARS[ch] ? ch : 'girl';
   const C = CHARS[ch];
+  prog = prog || {};
+  const lvl = clamp(prog.lvl | 0 || 1, 1, LEVEL.max);
+  const hp = C.hp + (lvl - 1) * LEVEL.hp;
   return {
+    lvl, exp: prog.exp | 0, petLine: PET_LINES[prog.pet] ? prog.pet : null, petExp: prog.petExp | 0,
     id: 'p' + pn, pn, ch, pal: pal || C.pals[pn === 0 ? 0 : 1], name: name || (pn === 0 ? 'P1' : 'P2'),
     x: 60 + pn * 40, y: 0, z: 160 + pn * 34, vx: 0, vy: 0, vz: 0, face: 1,
     st: 'idle', t: 0, anim: 'idle', fr: 0, rot: 0,
-    hp: C.hp, maxHp: C.hp, lives: PLAYER.lives, score: 0, meter: 0,
+    hp, maxHp: hp, lives: PLAYER.lives, score: 0, meter: 0,
     inv: 90, active: true, gone: false, combo: 0, buf: false, hitDone: false, hitSet: new Set(),
     hits: 0, hitsT: 0, grab: 0, sub: null, knees: 0, stun: 0, flash: 0, super: false, wpn: null, grabHold: 0, rollDir: 1,
     pend: { atkP: 0, jmpP: 0, grabP: 0, spP: 0, sp2P: 0 },
@@ -53,6 +57,7 @@ function startStage(i) {
     p.x = 50 + p.pn * 40; p.z = 160 + p.pn * 34; p.y = 0; p.vx = p.vy = 0; p.face = 1;
     if (p.st !== 'out') { p.active = true; p.st = 'idle'; p.t = 0; p.inv = 60; p.rot = 0; }
   }
+  for (const q of G.pets) { const o = G.players[q.owner]; if (o) { q.x = o.x - 30; q.z = clamp(o.z + 12, ZMIN, ZMAX); q.st = 'idle'; q.t = 0; } }
   setSong(S.song);
   fx('bn', 0, 0, 0, S.name + '|' + S.sub);
 }
@@ -92,6 +97,8 @@ function simStep(inputs) {
     for (const k in p.pend) { inp[k] = raw[k] || p.pend[k]; p.pend[k] = 0; }
     updPlayer(p, inp);
   });
+
+  if (G.petsOn) for (const q of G.pets) updPet(q);
 
   // who may attack right now
   const live = G.enemies.filter((e) => e.hp > 0 && e.st !== 'dying');
@@ -422,6 +429,93 @@ function superRelease() {
     e.superHit = 6 + n * 5; n++;
   }
   fx('supgo', p ? p.x : G.camX + VIEW_W / 2, 0, p ? p.z : 180);
+  if (p && p.lvl >= LEVEL.superPet) { const q = G.pets.find((q) => q.owner === p.pn); if (q) { q.st = 'roar'; q.t = 0; q.superRoar = true; } }
+}
+
+/* ---------- levels ---------- */
+function gainExp(p, n, feedPet) {
+  if (!n) return;
+  if (p.lvl < LEVEL.max) {
+    p.exp += n;
+    while (p.lvl < LEVEL.max && p.exp >= LEVEL.need(p.lvl)) {
+      p.exp -= LEVEL.need(p.lvl); p.lvl++;
+      p.maxHp += LEVEL.hp; p.hp = Math.min(p.maxHp, p.hp + p.maxHp * 0.3);
+      fx('lvlup', p.x, -60, p.z, p.lvl);
+    }
+    if (p.lvl >= LEVEL.max) p.exp = 0;
+  }
+  if (feedPet) { const q = G.pets.find((q) => q.owner === p.pn); if (q) addPetExp(q, n * 0.35); }
+}
+
+/* ---------- pets ---------- */
+function makePet(p) {
+  if (!G.petsOn || !p.petLine || G.pets.some((q) => q.owner === p.pn)) return;
+  G.pets.push({ id: G.nid++, owner: p.pn, line: p.petLine, exp: p.petExp, form: petForm(p.petExp), x: p.x - 30, y: 0, z: clamp(p.z + 12, ZMIN, ZMAX),
+    face: 1, st: 'idle', t: 0, cool: 30, roarT: PET.roarEvery, tgt: 0, hide: false });
+}
+function addPetExp(q, n) {
+  q.exp += n;
+  const o = G.players[q.owner]; if (o) o.petExp = Math.floor(q.exp);
+  const f = petForm(q.exp);
+  if (f > q.form) {
+    q.form = f; q.st = 'evolve'; q.t = 0;
+    const F = PET_LINES[q.line].forms[f];
+    fx('evo', q.x, -40, q.z, q.owner);
+    fx('bn', 0, 0, 0, 'EVOLUTION!|' + F.name);
+  }
+}
+function petHit(q, e, dmg, kind) {
+  const o = G.players[q.owner];
+  hurtEnemy(e, dmg, kind, o, q.x);
+  addPetExp(q, dmg);
+}
+function updPet(q) {
+  const o = G.players[q.owner];
+  if (!o || o.gone) { q.hide = true; return; }
+  q.hide = o.st === 'out';
+  if (q.hide) return;
+  q.t++; if (q.cool > 0) q.cool--; if (q.roarT > 0) q.roarT--;
+  const L = PET_LINES[q.line], f = q.form;
+  q.y = L.fly ? -38 - Math.sin(G.frame * 0.08) * 4 : 0;
+  if (q.st === 'evolve') { if (q.t >= 70) { q.st = 'idle'; q.t = 0; } return; }
+  if (q.st === 'atk') {
+    if (q.t === 8) {
+      const e = G.enemies.find((e) => e.id === q.tgt);
+      if (e && hittable(e) && Math.abs(e.x - q.x) < PET.reach[f] + 18 && Math.abs(e.z - q.z) < 14) petHit(q, e, PET.dmg[f], f >= 1 ? 'heavy' : 'light');
+    }
+    if (q.t >= 22) { q.st = 'idle'; q.t = 0; q.cool = PET.cool[f]; }
+    return;
+  }
+  if (q.st === 'roar') {
+    if (q.t === 12) {
+      fx('roar', q.x, -20, q.z, q.owner);
+      const big = q.superRoar ? 1.6 : 1;
+      for (const e of G.enemies) if (hittable(e) && Math.abs(e.x - q.x) < 95 * big && Math.abs(e.z - q.z) < 36) petHit(q, e, PET.roarDmg * big, 'heavy');
+    }
+    if (q.t >= 40) { q.st = 'idle'; q.t = 0; q.cool = 40; q.roarT = PET.roarEvery; q.superRoar = false; }
+    return;
+  }
+  let tgt = null, bd = 1e9;
+  for (const e of G.enemies) {
+    if (!hittable(e) || e.st === 'enter' || Math.abs(e.x - o.x) > 200) continue;
+    const d = Math.abs(e.x - q.x) + Math.abs(e.z - q.z) * 1.5;
+    if (d < bd) { bd = d; tgt = e; }
+  }
+  if (f === 2 && q.roarT <= 0 && tgt && Math.abs(tgt.x - q.x) < 90) { q.st = 'roar'; q.t = 0; return; }
+  let gx, gz;
+  if (tgt) { const side = q.x < tgt.x ? -1 : 1; gx = tgt.x + side * PET.reach[f] * 0.8; gz = tgt.z; }
+  else { gx = o.x - o.face * (30 + f * 12); gz = clamp(o.z + 14, ZMIN, ZMAX); }
+  const dx = gx - q.x, dz = gz - q.z;
+  const sp = PET.speed[f] * (tgt ? 1 : Math.min(1.5, Math.abs(dx) / 40 + 0.4));
+  const moving = Math.abs(dx) > 3 || Math.abs(dz) > 2;
+  if (Math.abs(dx) > 3) q.x += Math.sign(dx) * Math.min(sp, Math.abs(dx));
+  if (Math.abs(dz) > 2) q.z += Math.sign(dz) * Math.min(sp * 0.7, Math.abs(dz));
+  q.face = tgt ? (tgt.x > q.x ? 1 : -1) : (Math.abs(dx) > 3 ? Math.sign(dx) : o.face);
+  const st = moving ? (Math.abs(dx) > 50 ? 'run' : 'walk') : 'idle';
+  if (st !== q.st) { q.st = st; q.t = 0; }
+  if (Math.abs(q.x - o.x) > 260) { q.x = o.x - o.face * 30; q.z = o.z; }
+  q.x = clamp(q.x, G.camX - 20, G.camX + VIEW_W + 20); q.z = clamp(q.z, ZMIN, ZMAX);
+  if (tgt && Math.abs(tgt.x - q.x) <= PET.reach[f] + 6 && Math.abs(tgt.z - q.z) < 9 && q.cool <= 0) { q.st = 'atk'; q.t = 0; q.tgt = tgt.id; }
 }
 
 function grabbable(e) {
@@ -536,12 +630,13 @@ function attackHit(p, reach, dmg, kind, opt = {}) {
   return any;
 }
 
-function hurtEnemy(e, dmg, kind, p) {
+function hurtEnemy(e, dmg, kind, p, srcX) {
   const T = ENEMY[e.type];
+  if (p && p.lvl) dmg *= 1 + (p.lvl - 1) * LEVEL.dmg;
   dmg = Math.round(dmg);
   e.hp -= dmg; e.flash = 6; G.lastEnemy = e.id; G.lastEnemyT = 200;
-  if (p) { p.score += dmg * 10; p.meter = Math.min(100, p.meter + dmg * 1.15); p.hits++; p.hitsT = 110; }
-  const dir = p ? (Math.sign(e.x - p.x) || p.face) : -e.face;
+  if (p) { p.score += dmg * 10; p.meter = Math.min(100, p.meter + dmg * 1.15 * (1 + ((p.lvl || 1) - 1) * LEVEL.meter)); p.hits++; p.hitsT = 110; gainExp(p, dmg, srcX === undefined); }
+  const dir = srcX !== undefined ? (Math.sign(e.x - srcX) || 1) : p ? (Math.sign(e.x - p.x) || p.face) : -e.face;
   fx('dmg', e.x, -48 * T.sc, e.z, dmg);
   if (kind === 'grab') {
     fx('hit', e.x - dir * 6, -26 * T.sc, e.z);
@@ -567,7 +662,7 @@ function enemyKO(e, p) {
   const T = ENEMY[e.type];
   if (e._ko) return; e._ko = true;
   e.hp = 0;
-  if (p) p.score += T.score;
+  if (p) { p.score += T.score; gainExp(p, Math.round(T.score / 8), true); }
   fx('ko', e.x, 0, e.z);
   if (T.boss) {
     G.slowmo = 150;
@@ -809,12 +904,13 @@ function makeSnapshot() {
     f: G.frame, st: G.stage, ph: G.phase, pt: G.phaseT, cx: Math.round(G.camX * 10) / 10, go: G.goT > 0 ? 1 : 0,
     su: G.superT, sb: G.superBy, sm: G.slowmo > 0 ? 1 : 0, mu: G.song, le: G.lastEnemyT > 0 ? G.lastEnemy : 0,
     p: G.players.map((p) => [R1(p.x), R1(p.y), R1(p.z), p.face, p.anim, p.fr, Math.round(p.rot * 100), Math.ceil(p.hp), p.maxHp,
-      p.lives, p.score, Math.floor(p.meter), p.inv > 0 ? 1 : 0, p.active ? 1 : 0, p.pal, p.name, p.hits, p.st, p.flash > 0 ? 1 : 0, p.gone ? 1 : 0, p.ch, p.wpn ? p.wpn.k : '']),
+      p.lives, p.score, Math.floor(p.meter), p.inv > 0 ? 1 : 0, p.active ? 1 : 0, p.pal, p.name, p.hits, p.st, p.flash > 0 ? 1 : 0, p.gone ? 1 : 0, p.ch, p.wpn ? p.wpn.k : '', p.lvl, p.exp, p.petLine || '', Math.floor(p.petExp)]),
     e: G.enemies.map((e) => [e.id, e.type, R1(e.x), R1(e.y), R1(e.z), e.face, e.anim, e.fr, Math.round(e.rot * 100), Math.ceil(e.hp), e.maxHp,
       e.flash > 0 ? 1 : 0, e.tele, e.st, e.rage, e.move || '']),
     b: G.barrels.map((b) => [b.id, b.x, b.z, b.broken]),
     i: G.items.map((i) => [i.id, i.kind, R1(i.x), R1(i.y), R1(i.z)]),
     w: G.proj.map((q) => [q.id, q.k, R1(q.x), R1(q.y), R1(q.z), q.face]),
+    q: G.pets.map((q) => [q.id, q.owner, q.line, q.form, R1(q.x), R1(q.y), R1(q.z), q.face, q.st, q.hide ? 1 : 0]),
     x: G.fxLog.slice(-24),
   };
 }
@@ -834,7 +930,7 @@ function applySnapshot(s) {
     if (!p) p = G.players[i] = { id: 'p' + i, pn: i, x: a[0], y: a[1], z: a[2] };
     p.tx = a[0]; p.ty = a[1]; p.tz = a[2]; p.face = a[3]; p.anim = a[4]; p.fr = a[5]; p.rot = a[6] / 100;
     p.hp = a[7]; p.maxHp = a[8]; p.lives = a[9]; p.score = a[10]; p.meter = a[11]; p.inv = a[12]; p.active = !!a[13];
-    p.pal = a[14]; p.name = a[15]; p.hits = a[16]; p.st = a[17]; p.flash = a[18]; p.gone = !!a[19]; p.ch = a[20] || 'girl'; p.wpn = a[21] ? { k: a[21] } : null;
+    p.pal = a[14]; p.name = a[15]; p.hits = a[16]; p.st = a[17]; p.flash = a[18]; p.gone = !!a[19]; p.ch = a[20] || 'girl'; p.wpn = a[21] ? { k: a[21] } : null; p.lvl = a[22] || 1; p.exp = a[23] || 0; p.petLine = a[24] || null; p.petExp = a[25] || 0;
     if (Math.abs(p.tx - p.x) > 60 || Math.abs(p.ty - p.y) > 60) { p.x = p.tx; p.y = p.ty; p.z = p.tz; }
   });
   // enemies
@@ -850,6 +946,14 @@ function applySnapshot(s) {
   G.barrels = s.b.map((a) => ({ id: a[0], x: a[1], z: a[2], broken: a[3] }));
   G.items = s.i.map((a) => ({ id: a[0], kind: a[1], x: a[2], y: a[3], z: a[4] }));
   G.proj = (s.w || []).map((a) => ({ id: a[0], k: a[1], x: a[2], y: a[3], z: a[4], face: a[5] }));
+  const oldPets = new Map(G.pets.map((q) => [q.id, q]));
+  G.pets = (s.q || []).map((a) => {
+    let q = oldPets.get(a[0]);
+    if (!q) q = { id: a[0], x: a[4], y: a[5], z: a[6] };
+    q.owner = a[1]; q.line = a[2]; q.form = a[3]; q.tx = a[4]; q.ty = a[5]; q.tz = a[6]; q.face = a[7]; q.st = a[8]; q.hide = !!a[9];
+    if (Math.abs(q.tx - q.x) > 80) { q.x = q.tx; q.y = q.ty; q.z = q.tz; }
+    return q;
+  });
   // effects
   if (first) G.fxSeen = s.x.length ? s.x[s.x.length - 1][0] : 0;
   for (const f of s.x) if (f[0] > G.fxSeen) { G.fxSeen = f[0]; playFx(f); }
@@ -858,7 +962,7 @@ function applySnapshot(s) {
 /** Guest-side smoothing between snapshots (called every frame). */
 function guestSmooth() {
   const k = 0.45;
-  for (const o of G.players.concat(G.enemies)) {
+  for (const o of G.players.concat(G.enemies, G.pets || [])) {
     if (o.tx === undefined) continue;
     o.x += (o.tx - o.x) * k; o.y += (o.ty - o.y) * k; o.z += (o.tz - o.z) * k;
   }
