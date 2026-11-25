@@ -450,12 +450,14 @@ function gainExp(p, n, feedPet) {
 /* ---------- pets ---------- */
 function makePet(p) {
   if (!G.petsOn || !p.petLine || G.pets.some((q) => q.owner === p.pn)) return;
-  G.pets.push({ id: G.nid++, owner: p.pn, line: p.petLine, exp: p.petExp, form: petForm(p.petExp), x: p.x - 30, y: 0, z: clamp(p.z + 12, ZMIN, ZMAX),
+  G.pets.push({ id: G.nid++, owner: p.pn, line: p.petLine, exp: p.petExp, form: petForm(p.petExp), lvl: petLevel(p.petExp).lvl, x: p.x - 30, y: 0, z: clamp(p.z + 12, ZMIN, ZMAX),
     face: 1, st: 'idle', t: 0, cool: 30, roarT: PET.roarEvery, tgt: 0, hide: false });
 }
 function addPetExp(q, n) {
   q.exp += n;
   const o = G.players[q.owner]; if (o) o.petExp = Math.floor(q.exp);
+  const lv = petLevel(q.exp).lvl;
+  if (lv > (q.lvl || 1)) { q.lvl = lv; if (petForm(q.exp) === q.form) fx('petlvl', q.x, q.y - 40, q.z, lv); }
   const f = petForm(q.exp);
   if (f > q.form) {
     q.form = f; q.st = 'evolve'; q.t = 0;
@@ -481,16 +483,16 @@ function updPet(q) {
   if (q.st === 'atk') {
     if (q.t === 8) {
       const e = G.enemies.find((e) => e.id === q.tgt);
-      if (e && hittable(e) && Math.abs(e.x - q.x) < PET.reach[f] + 18 && Math.abs(e.z - q.z) < 14) petHit(q, e, PET.dmg[f], f >= 1 ? 'heavy' : 'light');
+      if (e && hittable(e) && Math.abs(e.x - q.x) < PET.reach[f] + 18 && Math.abs(e.z - q.z) < 14) petHit(q, e, PET.dmg[f] * petPow(q.lvl || 1), f >= 1 ? 'heavy' : 'light');
     }
-    if (q.t >= 22) { q.st = 'idle'; q.t = 0; q.cool = PET.cool[f]; }
+    if (q.t >= 22) { q.st = 'idle'; q.t = 0; q.cool = Math.round(PET.cool[f] * (1 - ((q.lvl || 1) - 1) * 0.008)); }
     return;
   }
   if (q.st === 'roar') {
     if (q.t === 12) {
       fx('roar', q.x, -20, q.z, q.owner);
       const big = q.superRoar ? 1.6 : 1;
-      for (const e of G.enemies) if (hittable(e) && Math.abs(e.x - q.x) < 95 * big && Math.abs(e.z - q.z) < 36) petHit(q, e, PET.roarDmg * big, 'heavy');
+      for (const e of G.enemies) if (hittable(e) && Math.abs(e.x - q.x) < 95 * big && Math.abs(e.z - q.z) < 36) petHit(q, e, PET.roarDmg * big * petPow(q.lvl || 1), 'heavy');
     }
     if (q.t >= 40) { q.st = 'idle'; q.t = 0; q.cool = 40; q.roarT = PET.roarEvery; q.superRoar = false; }
     return;
@@ -506,7 +508,7 @@ function updPet(q) {
   if (tgt) { const side = q.x < tgt.x ? -1 : 1; gx = tgt.x + side * PET.reach[f] * 0.8; gz = tgt.z; }
   else { gx = o.x - o.face * (30 + f * 12); gz = clamp(o.z + 14, ZMIN, ZMAX); }
   const dx = gx - q.x, dz = gz - q.z;
-  const sp = PET.speed[f] * (tgt ? 1 : Math.min(1.5, Math.abs(dx) / 40 + 0.4));
+  const sp = PET.speed[f] * (1 + ((q.lvl || 1) - 1) * 0.01) * (tgt ? 1 : Math.min(1.5, Math.abs(dx) / 40 + 0.4));
   const moving = Math.abs(dx) > 3 || Math.abs(dz) > 2;
   if (Math.abs(dx) > 3) q.x += Math.sign(dx) * Math.min(sp, Math.abs(dx));
   if (Math.abs(dz) > 2) q.z += Math.sign(dz) * Math.min(sp * 0.7, Math.abs(dz));
@@ -910,7 +912,7 @@ function makeSnapshot() {
     b: G.barrels.map((b) => [b.id, b.x, b.z, b.broken]),
     i: G.items.map((i) => [i.id, i.kind, R1(i.x), R1(i.y), R1(i.z)]),
     w: G.proj.map((q) => [q.id, q.k, R1(q.x), R1(q.y), R1(q.z), q.face]),
-    q: G.pets.map((q) => [q.id, q.owner, q.line, q.form, R1(q.x), R1(q.y), R1(q.z), q.face, q.st, q.hide ? 1 : 0]),
+    q: G.pets.map((q) => [q.id, q.owner, q.line, q.form, R1(q.x), R1(q.y), R1(q.z), q.face, q.st, q.hide ? 1 : 0, Math.floor(q.exp)]),
     x: G.fxLog.slice(-24),
   };
 }
@@ -950,7 +952,7 @@ function applySnapshot(s) {
   G.pets = (s.q || []).map((a) => {
     let q = oldPets.get(a[0]);
     if (!q) q = { id: a[0], x: a[4], y: a[5], z: a[6] };
-    q.owner = a[1]; q.line = a[2]; q.form = a[3]; q.tx = a[4]; q.ty = a[5]; q.tz = a[6]; q.face = a[7]; q.st = a[8]; q.hide = !!a[9];
+    q.owner = a[1]; q.line = a[2]; q.form = a[3]; q.tx = a[4]; q.ty = a[5]; q.tz = a[6]; q.face = a[7]; q.st = a[8]; q.hide = !!a[9]; q.exp = a[10] || 0;
     if (Math.abs(q.tx - q.x) > 80) { q.x = q.tx; q.y = q.ty; q.z = q.tz; }
     return q;
   });

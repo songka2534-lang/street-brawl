@@ -185,6 +185,10 @@ function playFx(e) {
     case 'go': sfx('go'); break;
     case 'wbrk': for (let i = 0; i < 7; i++) addPart({ type: 'chunk', x: x + rnd(-6, 6), y: rnd(-30, -16), z, vx: rnd(-2.2, 2.2), vy: rnd(-3.5, -1), life: 0, max: 40, size: 2 + Math.random() * 2, col: ['#b07a40', '#a8b0bc', '#e8c088'][i % 3], rot: 0 }); sfx('brk'); break;
     case 'taunt': floatText(x, y, z, '♪', '#ff6fd8', true); sfx('lvl'); break;
+    case 'petlvl':
+      floatText(x, y, z, 'PET LV ' + a, '#ff6fd8', true); sfx('pick');
+      addPart({ type: 'ring', x, y, z, life: 0, max: 18, size: 30, col: '#ff6fd8' });
+      burst(x, y, z, 12, { cols: ['#ffffff', '#ff6fd8'], speed: 2.4 }); break;
     case 'lvlup':
       floatText(x, y, z, 'LEVEL UP! ' + a, '#34e6ff', true); sfx('lvl'); flash(0.12, '#34e6ff');
       for (let i = 0; i < 2; i++) addPart({ type: 'ring', x, y: -24, z, life: -i * 6, max: 22, size: 40 + i * 20, col: '#34e6ff' });
@@ -689,6 +693,17 @@ function playerPanel(p, i) {
     ctx.fillStyle = 'rgba(0,0,0,0.7)'; ctx.fillRect(bx - 1, my + 3.5, w + 2, 2.5);
     ctx.fillStyle = '#34e6ff'; if (right) ctx.fillRect(bx + w - w * er, my + 4, w * er, 1.5); else ctx.fillRect(bx, my + 4, w * er, 1.5);
   }
+  // pet: name, level, EXP
+  const pet = G.pets && G.pets.find((q) => q.owner === i);
+  if (pet && typeof PET_LINES !== 'undefined' && PET_LINES[pet.line]) {
+    const pl = petLevel(pet.exp || 0), F = PET_LINES[pet.line].forms[pet.form | 0];
+    hudFont(6.5, THAI, 600); ctx.textAlign = right ? 'right' : 'left';
+    outlinedText(`${F.name}  LV${pl.lvl}`, right ? bx + w : bx, my + 21, '#ffb0d8', '#000', 2.5);
+    const pr = pl.need ? clamp(pl.into / pl.need, 0, 1) : 1, pw = 60;
+    const px0 = right ? bx + w - pw : bx;
+    ctx.fillStyle = 'rgba(0,0,0,0.7)'; ctx.fillRect(px0 - 1, my + 23.5, pw + 2, 3);
+    ctx.fillStyle = '#ff6fd8'; if (right) ctx.fillRect(px0 + pw - pw * pr, my + 24, pw * pr, 2); else ctx.fillRect(px0, my + 24, pw * pr, 2);
+  }
   if (p.st === 'out') { hudFont(8, PIX); ctx.textAlign = 'center'; outlinedText('GAME OVER', bx + w / 2, by + 6, '#ff3b5c', '#000', 3); }
   ctx.restore();
 }
@@ -715,7 +730,7 @@ function enemyBars() {
   if (!G.lastEnemyT) return;
   const e = G.enemies.find((q) => q.id === G.lastEnemy);
   if (!e || !ENEMY[e.type]) return;
-  const w = 70, x = 38, y = 40;
+  const w = 70, x = 38, y = 60;
   hudFont(6, PIX); ctx.textAlign = 'left';
   outlinedText(ENEMY[e.type].name, x, y - 2, '#fff', '#000', 2.5);
   ctx.fillStyle = 'rgba(0,0,0,0.7)'; ctx.fillRect(x - 1, y, w + 2, 5);

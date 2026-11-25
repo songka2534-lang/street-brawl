@@ -177,4 +177,13 @@ const PET_LINES = {
   llama:  { name: 'สายลามะ', forms: [{ m: 'llama', h: 0.8, name: 'ลามะน้อย' }, { m: 'llama', h: 1.4, name: 'ลามะ' }, { m: 'llama', h: 2.4, name: 'ลามะยักษ์', aura: 0x34e6ff }] },
 };
 const PET_ORDER = Object.keys(PET_LINES);
-function petForm(exp) { return exp >= PET.exp[2] ? 2 : exp >= PET.exp[1] ? 1 : 0; }
+/* Pet levels 1-30, worked out from the pet's saved EXP. Middle form at Lv10, final form at Lv20. */
+const PET_LV = { max: 30, need: (l) => 30 + 4 * l * l, evo: [10, 20] };
+function petLevel(exp) {
+  let l = 1, e = exp;
+  while (l < PET_LV.max && e >= PET_LV.need(l)) { e -= PET_LV.need(l); l++; }
+  return { lvl: l, into: l >= PET_LV.max ? 0 : Math.floor(e), need: l >= PET_LV.max ? 0 : PET_LV.need(l) };
+}
+function petForm(exp) { const l = petLevel(exp).lvl; return l >= PET_LV.evo[1] ? 2 : l >= PET_LV.evo[0] ? 1 : 0; }
+// stat boost per pet level
+const petPow = (lvl) => 1 + (lvl - 1) * 0.035;

@@ -30,8 +30,8 @@ function petStep(d) {
   if (NET.open) netSend({ t: 'ch', ch: APP.myChar, prog: myProg() });
 }
 function updatePetRows() {
-  const L = PET_LINES[APP.save.pet], exp = APP.save.pets[APP.save.pet] || 0, f = petForm(exp);
-  const next = f < 2 ? `EXP ${exp}/${PET.exp[f + 1]}` : 'ร่างสุดท้าย';
+  const L = PET_LINES[APP.save.pet], exp = APP.save.pets[APP.save.pet] || 0, f = petForm(exp), pl = petLevel(exp);
+  const next = `LV ${pl.lvl}` + (pl.need ? ` · EXP ${pl.into}/${pl.need}` : ' (สูงสุด)') + (f < 2 ? ` · ร่างถัดไปที่ LV${PET_LV.evo[f]}` : '');
   for (const row of document.querySelectorAll('.pet-row')) {
     row.querySelector('.pet-name').textContent = `${L.name} · ${L.forms[f].name}`;
     row.querySelector('.pet-sub').textContent = `ร่าง ${f + 1}/3 · ${next}`;
@@ -370,6 +370,7 @@ function wire() {
   };
   $('#btnOverQuit').onclick = () => quitToTitle();
   window.addEventListener('resize', () => { resizeCanvas(); updateTouchUI(); });
+  if (window.visualViewport) window.visualViewport.addEventListener('resize', () => { resizeCanvas(); updateTouchUI(); });
   window.addEventListener('orientationchange', () => setTimeout(() => { resizeCanvas(); updateTouchUI(); }, 200));
   document.addEventListener('visibilitychange', () => { if (document.hidden && G && G.mode === 'solo' && APP.screen === 'game') openPause(); });
   document.addEventListener('pointerdown', () => { audioUnlock(); if (!AU.song) playSong('title'); }, { once: false, passive: true });

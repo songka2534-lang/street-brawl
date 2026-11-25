@@ -1140,7 +1140,8 @@
       for (const t of saved) {
         v3.set(wx(t.x), wy(t.y) + 0.4, wz(t.z)).project(R.camera);
         if (v3.z > 1) continue;
-        const px = (v3.x + 1) / 2 * cv.width, py = (1 - v3.y) / 2 * cv.height;
+        const c3 = R.renderer.domElement, kx = cv.width / window.innerWidth, ky = cv.height / window.innerHeight;
+        const px = (v3.x + 1) / 2 * c3.clientWidth * kx, py = (1 - v3.y) / 2 * c3.clientHeight * ky;
         TEXTS.push({ x: (px - OX) / SC, y: 0, z: (py - OY) / SC + CROP, t: t.t, txt: t.txt, col: t.col, big: t.big });
       }
       drawHUD(0, 0, 0);
@@ -1153,9 +1154,12 @@
     const w = window.innerWidth, h = window.innerHeight;
     cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr);
     RW = clamp(Math.round(SH * (w / h)), VIEW_W, 520);
+    // the 3D view also fills the strip behind Safari's toolbar (CSS 100lvh), so size it from its own box
+    const c3 = R.renderer ? R.renderer.domElement : null;
+    const w3 = c3 ? Math.max(1, c3.clientWidth) : w, h3 = c3 ? Math.max(1, c3.clientHeight) : h;
     SC = Math.min(cv.width / RW, cv.height / SH);
     OX = Math.round((cv.width - RW * SC) / 2); OY = Math.round((cv.height - SH * SC) / 2);
-    if (R.renderer) { R.renderer.setPixelRatio(Math.min(dpr, 2)); R.renderer.setSize(w, h, false); R.camera.aspect = w / h; R.camera.updateProjectionMatrix(); }
+    if (R.renderer) { R.renderer.setPixelRatio(Math.min(dpr, 2)); R.renderer.setSize(w3, h3, false); R.camera.aspect = w3 / h3; R.camera.updateProjectionMatrix(); }
   }
 
   /* ---------- thumbnails (select screen) + HUD portraits ---------- */
