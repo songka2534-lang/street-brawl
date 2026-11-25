@@ -342,6 +342,10 @@ async function boot() {
     $('#loading').textContent = 'โหลดไฟล์เกมไม่สำเร็จ ลองรีเฟรชหน้า';
     return;
   }
+  if (window.__INIT3D) {
+    try { await window.__INIT3D((k) => { $('#loading').textContent = 'กำลังโหลดโมเดล 3D… ' + Math.round(k * 100) + '%'; }); }
+    catch (e) { console.error(e); $('#loading').textContent = 'โหลดโมเดล 3D ไม่สำเร็จ ลองรีเฟรช หรือเล่นเวอร์ชัน 2D'; return; }
+  }
   $('#loading').hidden = true;
   show('scrTitle');
   requestAnimationFrame(frame);

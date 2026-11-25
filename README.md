@@ -38,6 +38,10 @@
 - `barrels`: ตำแหน่งถังน้ำมัน
 - `waves`: ระลอกศัตรู ระลอกสุดท้ายใส่ `at: 'end'` และใส่ `boss`
 
+## เวอร์ชัน 3D (ทดลอง)
+เปิด `3d.html` หรือกดปุ่ม "ลองเวอร์ชัน 3D" ที่หน้าแรก ระบบเกม ด่าน และโหมดออนไลน์เหมือนเวอร์ชัน 2D ทุกอย่าง ต่างกันแค่ภาพ
+ตัวละคร 3D ของ Quaternius ใช้สัญญาอนุญาต CC0 (ดู `assets/3d/LICENSE.txt`) วาดภาพด้วย Three.js (MIT)
+
 ## เครดิตและสัญญาอนุญาต
 - ภาพตัวละครและฉาก: ["Streets of Fight" โดย ansimuz](https://ansimuz.itch.io/streets-of-fight) สัญญาอนุญาต CC0 (ดู `assets/streets-of-fight/LICENSE.txt`)
 - PeerJS: MIT License (ดู `js/vendor/peerjs-LICENSE.txt`)

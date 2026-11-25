@@ -734,7 +734,7 @@ function makeSnapshot() {
     p: G.players.map((p) => [R1(p.x), R1(p.y), R1(p.z), p.face, p.anim, p.fr, Math.round(p.rot * 100), Math.ceil(p.hp), p.maxHp,
       p.lives, p.score, Math.floor(p.meter), p.inv > 0 ? 1 : 0, p.active ? 1 : 0, p.pal, p.name, p.hits, p.st, p.flash > 0 ? 1 : 0, p.gone ? 1 : 0, p.ch]),
     e: G.enemies.map((e) => [e.id, e.type, R1(e.x), R1(e.y), R1(e.z), e.face, e.anim, e.fr, Math.round(e.rot * 100), Math.ceil(e.hp), e.maxHp,
-      e.flash > 0 ? 1 : 0, e.tele, e.st, e.rage]),
+      e.flash > 0 ? 1 : 0, e.tele, e.st, e.rage, e.move || '']),
     b: G.barrels.map((b) => [b.id, b.x, b.z, b.broken]),
     i: G.items.map((i) => [i.id, i.kind, R1(i.x), R1(i.y), R1(i.z)]),
     x: G.fxLog.slice(-24),
@@ -765,7 +765,7 @@ function applySnapshot(s) {
     let e = old.get(a[0]);
     if (!e) e = { id: a[0], x: a[2], y: a[3], z: a[4] };
     e.type = a[1]; e.tx = a[2]; e.ty = a[3]; e.tz = a[4]; e.face = a[5]; e.anim = a[6]; e.fr = a[7]; e.rot = a[8] / 100;
-    e.hp = a[9]; e.maxHp = a[10]; e.flash = a[11]; e.tele = a[12]; e.st = a[13]; e.rage = a[14];
+    e.hp = a[9]; e.maxHp = a[10]; e.flash = a[11]; e.tele = a[12]; e.st = a[13]; e.rage = a[14]; e.move = a[15] || '';
     if (Math.abs(e.tx - e.x) > 80) { e.x = e.tx; e.y = e.ty; e.z = e.tz; }
     return e;
   });

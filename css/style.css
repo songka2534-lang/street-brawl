@@ -16,6 +16,7 @@ html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
 body { font-family: var(--thai); -webkit-user-select: none; user-select: none; touch-action: none; overscroll-behavior: none; }
 [hidden] { display: none !important; }
 
+#game3d { position: fixed; inset: 0; width: 100vw; height: 100vh; height: 100dvh; display: block; }
 #game { position: fixed; inset: 0; width: 100vw; height: 100vh; height: 100dvh; display: block; image-rendering: pixelated; image-rendering: crisp-edges; background: #000; }
 
 /* ---------- screens ---------- */
@@ -47,6 +48,8 @@ p { margin: 0; }
 .btn-ghost { background: rgba(255,255,255,.06); border: 2px solid var(--line); }
 .btn.small { padding: 10px 14px; font-size: .95rem; }
 .heart { color: #fff; }
+.link-btn { display: block; text-decoration: none; text-align: center; }
+.tag3d { color: var(--cyan) !important; text-shadow: 3px 3px 0 #0a3a4a, 6px 6px 0 #000 !important; }
 
 .name-row { display: flex; align-items: center; justify-content: center; gap: 10px; color: var(--muted); font-size: .95rem; flex-wrap: wrap; }
 input { font: 600 1.05rem var(--thai); color: var(--text); background: rgba(0,0,0,.45); border: 2px solid var(--line); border-radius: 8px;

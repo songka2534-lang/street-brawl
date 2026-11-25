@@ -1,0 +1,5 @@
+3D characters, hairstyles and animations by Quaternius (https://quaternius.com), CC0 1.0:
+- Universal Base Characters  https://quaternius.itch.io/universal-base-characters
+- Universal Animation Library  https://quaternius.itch.io/universal-animation-library
+- Universal Animation Library 2  https://quaternius.itch.io/universal-animation-library-2
+Files were re-exported here with smaller textures and only the animations the game uses.
