@@ -16,9 +16,11 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Kanit:wght@400;600;800&family=Press+Start+2P&display=swap">
 <link rel="stylesheet" href="css/style.css">
+<style>#game{background:transparent} .char canvas{image-rendering:auto}</style>
 </head>
 <body>
-<canvas id="game" aria-label="Street Brawl"></canvas>
+<canvas id="game3d" aria-hidden="true"></canvas>
+<canvas id="game" aria-label="Street Brawl 3D"></canvas>
 
 <!-- in-game corner buttons -->
 <div id="corner" hidden>
@@ -57,13 +59,13 @@
 <!-- screens -->
 <section id="scrTitle" class="scr">
   <div class="panel title-panel">
-    <h1 class="logo"><span>STREET</span><span>BRAWL</span></h1>
+    <h1 class="logo"><span>STREET</span><span>BRAWL</span><span class="tag3d">3D</span></h1>
     <p class="tag">ศึกถนนสองเรา</p>
     <div class="menu">
       <button class="btn btn-main" id="goSolo">เล่นคนเดียว</button>
       <button class="btn btn-love" id="goOnline">เล่นออนไลน์กับแฟน <span class="heart">♥</span></button>
       <button class="btn btn-ghost" id="goHelp">วิธีเล่น</button>
-      <a class="btn btn-ghost link-btn" href="3d.html">ลองเวอร์ชัน 3D (ทดลอง)</a>
+      <a class="btn btn-ghost link-btn" href="2d.html">เวอร์ชัน 2D (สำหรับมือถือรุ่นเก่า)</a>
     </div>
     <label class="name-row">ชื่อของคุณ
       <input id="inName" maxlength="10" autocomplete="off" placeholder="เช่น ต้น">
@@ -168,6 +170,9 @@
 <div id="toast" role="status" hidden></div>
 
 <script src="js/vendor/peerjs.min.js"></script>
+<script src="js/vendor/three.min.js"></script>
+<script src="js/vendor/GLTFLoader.js"></script>
+<script src="js/vendor/SkeletonUtils.js"></script>
 <script src="js/data.js"></script>
 <script src="js/assets.js"></script>
 <script src="js/audio.js"></script>
@@ -175,6 +180,7 @@
 <script src="js/sim.js"></script>
 <script src="js/render.js"></script>
 <script src="js/net.js"></script>
+<script src="js/render3d.js"></script>
 <script src="js/main.js"></script>
 </body>
 </html>
